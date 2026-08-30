@@ -307,6 +307,7 @@ function siteFooter() {
     <a href="/афиша-на-неделю.html">На неделю</a>
     <a href="/афиша-на-месяц.html">На месяц</a>
     <a href="/афиша-2026.html">Афиша 2026</a>
+    <a href="/афиша-2027.html">Афиша 2027</a>
   </div>
 
   <div class="footer-bottom wrap">
@@ -357,11 +358,13 @@ function showCard(show) {
   const cities = [...new Set((show.Seances || []).map(s => s.city).filter(Boolean))];
   const cityText = cities.slice(0, 2).join(' · ') + (cities.length > 2 ? ' и др.' : '');
   const dates = [...new Set((show.Seances || []).map(s => s.date).filter(Boolean))];
+  const halls = [...new Set((show.Seances || []).map(s => s.hall).filter(Boolean))];
   const nextDate = dates[0] || show.dateFrom;
   return `<article class="card"
     data-name="${esc(show.name)}"
     data-section="${esc(show.section)}"
     data-city="${esc(cities.join('|'))}"
+    data-venue="${esc(halls.join('|'))}"
     data-date-from="${esc(show.dateFrom || dates[0] || '')}"
     data-dates="${esc(dates.join(','))}">
     <a class="card-media" href="${esc(show._url)}" aria-label="${esc(show.name)}">
@@ -512,6 +515,13 @@ const HUB_PAGES = [
     intro: 'Все концерты, спектакли и мероприятия 2026 года по всему Израилю. Обширная афиша, которая регулярно обновляется.',
   },
   {
+    slug: 'афиша-2027', when: 'year-2027',
+    title: 'Афиша 2027 в Израиле | Концерты, спектакли и мероприятия 2027 - ТОП Афиша',
+    desc: 'Полная афиша на 2027 год: концерты, спектакли, мероприятия и культурные события по всему Израилю. Бронируйте билеты заранее.',
+    h1: 'Билеты на концерты, спектакли и мероприятия 2027',
+    intro: 'Все концерты, спектакли и мероприятия, запланированные на 2027 год по всему Израилю. Успейте забронировать билеты на главные события следующего года.',
+  },
+  {
     slug: 'афиша-тель-авив-сегодня', when: 'today', city: TLV,
     title: 'Афиша Тель-Авив на сегодня | Билеты на мероприятия сегодня в Тель-Авиве - ТОП Афиша',
     desc: 'Все концерты и спектакли, которые проходят сегодня в Тель-Авиве-Яффо. Актуальные даты и безопасная покупка билетов.',
@@ -567,6 +577,7 @@ function buildHubPages(shows) {
       case 'next-7': return dateStr >= todayStr && dateStr <= plus6;
       case 'this-month': return dateStr >= todayStr && dateStr <= plus29;
       case 'year-2026': return dateStr.slice(0, 4) === '2026';
+      case 'year-2027': return dateStr.slice(0, 4) === '2027';
       default: return false;
     }
   }
@@ -754,6 +765,18 @@ function buildIndex(shows) {
   const cityOptions = citiesSorted.map(c =>
     `<option value="${esc(c)}">${escText(c)}</option>`).join('');
 
+  // Залы: 8 самых частых (чипы, короткие названия) + выпадающий список всех залов
+  const hallCount = {};
+  shows.forEach(s => [...new Set((s.Seances || []).map(z => z.hall).filter(Boolean))]
+    .forEach(h => { hallCount[h] = (hallCount[h] || 0) + 1; }));
+  const topVenues = Object.entries(hallCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(e => e[0]);
+  const venueLabel = h => h.split(/\s[-–—]\s|,/)[0].trim();
+  const venueChips = topVenues.map(h =>
+    `<button class="chip" data-filter="venue" data-value="${esc(h)}" title="${esc(h)}">${escText(venueLabel(h))}</button>`).join('');
+  const allVenues = Object.keys(hallCount).sort((a, b) => a.localeCompare(b, 'ru'));
+  const venueOptions = allVenues.map(h =>
+    `<option value="${esc(h)}">${escText(h)}</option>`).join('');
+
   const body = `
 <section class="hero">
   <div class="wrap hero-inner">
@@ -794,6 +817,17 @@ function buildIndex(shows) {
         <button class="chip" data-filter="date" data-value="weekend">Ближайшие выходные (чт–сб)</button>
         <button class="chip" data-filter="date" data-value="next-7">Ближайшие 7 дней</button>
         <button class="chip" data-filter="date" data-value="this-month">Ближайший месяц</button>
+      </div>
+    </div>
+    <div class="filter-row">
+      <span class="filter-label">Залы и театры</span>
+      <div class="chips venue-chips">
+        <button class="chip is-active" data-filter="venue" data-value="">Все</button>
+        ${venueChips}
+        <select id="venue-select" class="city-select venue-select" aria-label="Выбор зала из всех залов">
+          <option value="">Все остальные залы…</option>
+          ${venueOptions}
+        </select>
       </div>
     </div>
   </div>
@@ -895,6 +929,17 @@ function israelOffset(dateStr) {
   } catch (e) { return '+02:00'; }
 }
 
+// Ориентировочное время окончания: +3 часа после начала, ISO 8601 с часовым поясом
+function endDateTime(dateStr, timeStr) {
+  const [y, mo, d] = String(dateStr).split('-').map(Number);
+  const [hh, mm, ss] = String(timeStr || '20:00:00').split(':').map(Number);
+  const dt = new Date(Date.UTC(y, mo - 1, d, hh, mm, ss || 0));
+  dt.setUTCHours(dt.getUTCHours() + 3);
+  const p = n => String(n).padStart(2, '0');
+  const eyd = `${dt.getUTCFullYear()}-${p(dt.getUTCMonth() + 1)}-${p(dt.getUTCDate())}`;
+  return `${eyd}T${p(dt.getUTCHours())}:${p(dt.getUTCMinutes())}:${p(dt.getUTCSeconds())}${israelOffset(eyd)}`;
+}
+
 function eventSchema(show) {
   const type = eventType(show.section);
   const events = (show.Seances || []).map(s => ({
@@ -905,6 +950,8 @@ function eventSchema(show) {
     description: stripTags(show.description).slice(0, 300),
     image: show.image,
     startDate: `${s.date}T${(s.time || '20:00:00')}${israelOffset(s.date)}`,
+    endDate: endDateTime(s.date, s.time),
+    performer: { '@type': 'PerformingGroup', name: show.name },
     eventStatus: 'https://schema.org/EventScheduled',
     eventAttendanceMode: 'https://schema.org/OfflineEventAttendanceMode',
     location: {
@@ -1146,6 +1193,7 @@ img{max-width:100%;display:block}
   font-size:14px;transition:all .15s ease}
 .chip:hover{border-color:var(--plum);color:var(--plum)}
 .chip.is-active{background:var(--plum);border-color:var(--plum);color:#fff}
+.venue-chips .chip{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 .results-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap}
 .section-title{font-size:24px;margin:0;font-weight:800}
@@ -1362,9 +1410,10 @@ const APP_JS = `(function(){
   var countEl=document.getElementById('count');
   var emptyEl=document.getElementById('empty');
   var citySelect=document.getElementById('city-select');
+  var venueSelect=document.getElementById('venue-select');
   var loadMoreWrap=document.getElementById('load-more-wrap');
   var loadMoreBtn=document.getElementById('load-more');
-  var state={text:'',section:'',city:'',date:'all'};
+  var state={text:'',section:'',city:'',venue:'',date:'all'};
   var PAGE=24, shownLimit=PAGE;
 
   function pad(n){return (n<10?'0':'')+n;}
@@ -1402,8 +1451,10 @@ const APP_JS = `(function(){
       var okText=!t || name.indexOf(t)>-1 || section.toLowerCase().indexOf(t)>-1 || cities.join(' ').toLowerCase().indexOf(t)>-1;
       var okSection=!state.section || section===state.section;
       var okCity=!state.city || cities.indexOf(state.city)>-1;
+      var venues=(card.getAttribute('data-venue')||'').split('|');
+      var okVenue=!state.venue || venues.indexOf(state.venue)>-1;
       var okDate=matchDate(card.getAttribute('data-dates'), state.date);
-      if(okText&&okSection&&okCity&&okDate){
+      if(okText&&okSection&&okCity&&okVenue&&okDate){
         matched++;
         if(rendered<shownLimit){ card.style.display=''; rendered++; }
         else { card.style.display='none'; }
@@ -1433,6 +1484,16 @@ const APP_JS = `(function(){
     if(citySelect) citySelect.value = chipMatch ? '' : (v || '');
   }
 
+  function syncVenueUI(v){
+    var chipMatch=false;
+    [].forEach.call(document.querySelectorAll('.chip[data-filter="venue"]'),function(c){
+      var on=c.getAttribute('data-value')===v;
+      if(on && v) chipMatch=true;
+      c.classList.toggle('is-active', on);
+    });
+    if(venueSelect) venueSelect.value = chipMatch ? '' : (v || '');
+  }
+
   if(q) q.addEventListener('input',function(){state.text=q.value;apply();});
 
   try{
@@ -1447,6 +1508,8 @@ const APP_JS = `(function(){
       state[f]=v;
       if(f==='city'){
         syncCityUI(v);
+      } else if(f==='venue'){
+        syncVenueUI(v);
       } else {
         [].slice.call(document.querySelectorAll('.chip[data-filter="'+f+'"]')).forEach(function(c){
           c.classList.toggle('is-active', c===chip);
@@ -1459,6 +1522,12 @@ const APP_JS = `(function(){
   if(citySelect) citySelect.addEventListener('change',function(){
     state.city=citySelect.value;
     syncCityUI(citySelect.value);
+    apply();
+  });
+
+  if(venueSelect) venueSelect.addEventListener('change',function(){
+    state.venue=venueSelect.value;
+    syncVenueUI(venueSelect.value);
     apply();
   });
 
