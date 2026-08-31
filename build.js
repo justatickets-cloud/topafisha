@@ -746,6 +746,133 @@ ${cards}
   return artistShows.length;
 }
 
+/* ============ Evergreen: постоянные страницы артистов и залов + перелинковка ============ */
+let ARTIST_REGISTRY = [];
+let VENUE_REGISTRY = [];
+const artistUrlByName = {};
+const venueUrlByHall = {};
+
+function assignHubs(shows) {
+  const byArtist = {};
+  shows.forEach(s => { if (isCleanArtist(s.name)) (byArtist[s.name] = byArtist[s.name] || []).push(s); });
+  const aUsed = new Set();
+  ARTIST_REGISTRY = Object.keys(byArtist).sort((a, b) => a.localeCompare(b, 'ru')).map(name => {
+    let slug = slugify(name) || 'artist';
+    if (aUsed.has(slug)) slug += '-' + byArtist[name][0].id;
+    aUsed.add(slug);
+    const url = `/artist/${slug}/`;
+    artistUrlByName[name] = url;
+    return { name, slug, url, shows: byArtist[name] };
+  });
+
+  const byHall = {};
+  shows.forEach(s => [...new Set((s.Seances || []).map(z => z.hall).filter(Boolean))]
+    .forEach(h => (byHall[h] = byHall[h] || []).push(s)));
+  const vUsed = new Set();
+  VENUE_REGISTRY = Object.keys(byHall).filter(h => byHall[h].length >= 2)
+    .sort((a, b) => a.localeCompare(b, 'ru')).map(hall => {
+      let slug = slugify(hall) || 'venue';
+      if (vUsed.has(slug)) slug += '-' + byHall[hall][0].id;
+      vUsed.add(slug);
+      const url = `/venues/${slug}/`;
+      venueUrlByHall[hall] = url;
+      let city = '', address = '';
+      for (const s of byHall[hall]) {
+        const se = (s.Seances || []).find(z => z.hall === hall);
+        if (se) { city = se.city || city; address = se.address || address; if (city) break; }
+      }
+      return { hall, slug, url, shows: byHall[hall], city, address };
+    });
+}
+
+function buildArtistPages() {
+  ARTIST_REGISTRY.forEach(a => {
+    const canonical = `${BRAND.domain}${a.url}`;
+    const image = (a.shows.find(s => s.image) || {}).image || '';
+    const cards = a.shows.map(showCard).join('\n');
+    const crumb = breadcrumbSchema([
+      { name: 'Главная', url: BRAND.domain + '/' },
+      { name: 'Артисты', url: BRAND.domain + '/артисты/' },
+      { name: a.name, url: canonical },
+    ]);
+    const profile = {
+      '@context': 'https://schema.org',
+      '@type': 'ProfilePage',
+      mainEntity: { '@type': 'MusicGroup', name: a.name, url: canonical, image: image || undefined },
+    };
+    const empty = `<div class="hub-empty">
+      <p>Сейчас нет ближайших мероприятий ${escText(a.name)}. Артист скоро вернётся — загляните позже.</p>
+      <ul class="hub-empty-links"><li><a href="/">Все мероприятия</a></li><li><a href="/артисты/">Все артисты</a></li></ul>
+    </div>`;
+    const body = `
+<article class="hub">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <a href="/артисты/">Артисты</a> <span>›</span> <span class="current">${escText(a.name)}</span></nav>
+    <h1 class="hub-title">${escText(a.name)} — билеты и концерты</h1>
+    <p class="hub-intro">Все ближайшие концерты и мероприятия ${escText(a.name)} в Израиле. Актуальные даты, города и цены, безопасная покупка билетов в одном месте.</p>
+    <div class="results-head"><span class="results-count">Найдено: ${a.shows.length}</span></div>
+    ${a.shows.length ? `<div class="grid">\n${cards}\n</div>` : empty}
+  </div>
+</article>`;
+    const html = page({
+      title: `${a.name} — билеты на концерты и мероприятия | ТОП Афиша`,
+      description: `Все ближайшие концерты и мероприятия ${a.name} в Израиле. Актуальные даты, цены и безопасная покупка билетов.`,
+      canonical,
+      head: crumb + `\n<script type="application/ld+json">${JSON.stringify(profile)}</script>` + (image ? `\n<meta property="og:image" content="${esc(image)}">` : ''),
+      body,
+    });
+    const dir = path.join(BRAND.outDir, 'artist', a.slug);
+    ensureDir(dir);
+    fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+  });
+  return ARTIST_REGISTRY.length;
+}
+
+function buildVenuePages() {
+  VENUE_REGISTRY.forEach(v => {
+    const canonical = `${BRAND.domain}${v.url}`;
+    const cards = v.shows.map(showCard).join('\n');
+    const crumb = breadcrumbSchema([
+      { name: 'Главная', url: BRAND.domain + '/' },
+      { name: v.hall, url: canonical },
+    ]);
+    const placeSchema = {
+      '@context': 'https://schema.org',
+      '@type': 'Place',
+      name: v.hall,
+      url: canonical,
+      address: {
+        '@type': 'PostalAddress',
+        streetAddress: v.address || v.hall,
+        addressLocality: v.city || undefined,
+        addressCountry: 'IL',
+      },
+    };
+    const loc = [v.address, v.city].filter(Boolean).join(', ');
+    const body = `
+<article class="hub">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span>Залы</span> <span>›</span> <span class="current">${escText(v.hall)}</span></nav>
+    <h1 class="hub-title">${escText(v.hall)}</h1>
+    <p class="hub-intro">Афиша ближайших мероприятий в зале ${escText(v.hall)}${loc ? ' · ' + escText(loc) : ''}. Актуальные даты, цены и билеты в реальном времени.</p>
+    <div class="results-head"><span class="results-count">Найдено: ${v.shows.length}</span></div>
+    ${v.shows.length ? `<div class="grid">\n${cards}\n</div>` : hubEmpty()}
+  </div>
+</article>`;
+    const html = page({
+      title: `${v.hall} — афиша и билеты | ТОП Афиша`,
+      description: `Все ближайшие мероприятия в зале ${v.hall}${v.city ? ', ' + v.city : ''}. Актуальные даты, цены и безопасная покупка билетов.`,
+      canonical,
+      head: crumb + `\n<script type="application/ld+json">${JSON.stringify(placeSchema)}</script>`,
+      body,
+    });
+    const dir = path.join(BRAND.outDir, 'venues', v.slug);
+    ensureDir(dir);
+    fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+  });
+  return VENUE_REGISTRY.length;
+}
+
 /* ------------------------------ Главная страница -------------------------------- */
 function buildIndex(shows) {
   const sections = [...new Set(shows.map(s => s.section).filter(Boolean))];
@@ -894,7 +1021,7 @@ function seanceRow(show, s) {
     <td data-th="Дата">${formatDate(s.date)}</td>
     <td data-th="Время">${formatTime(s.time)}</td>
     <td data-th="Город">${escText(s.city)}</td>
-    <td data-th="Зал">${escText(s.hall)}</td>
+    <td data-th="Зал">${venueUrlByHall[s.hall] ? `<a href="${esc(venueUrlByHall[s.hall])}">${escText(s.hall)}</a>` : escText(s.hall)}</td>
     <td data-th="Цена">${priceLabel(s.priceMin, s.priceMax)}</td>
     <td data-th="Заказ"><a class="btn btn-primary btn-sm" href="${esc(affiliateUrl(s.link))}" target="_blank" rel="noopener sponsored">Заказать билеты</a></td>
   </tr>`;
@@ -1000,6 +1127,7 @@ function buildShow(show) {
         <span class="pill">${escText(show.section)}</span>
         <h1 class="show-title">${escText(show.name)}</h1>
         <p class="show-announce">${escText(show.announce || '')}</p>
+        ${artistUrlByName[show.name] ? `<p class="show-artist-link"><a href="${esc(artistUrlByName[show.name])}">Все концерты ${escText(show.name)} ›</a></p>` : ''}
         <div class="show-facts">
           <div class="fact"><span class="fact-k">Даты</span><span class="fact-v">${formatDate(show.dateFrom)}</span></div>
           <div class="fact"><span class="fact-k">Место</span><span class="fact-v">${escText(cities.join(' · ') || 'уточняется')}</span></div>
@@ -1087,6 +1215,8 @@ function buildSitemap(shows) {
     ...HUB_PAGES.map(p => ({ loc: `${BRAND.domain}/${p.slug}.html`, pri: '0.9' })),
     ...CITY_PAGES.map(p => ({ loc: `${BRAND.domain}/${p.slug}/`, pri: '0.9' })),
     { loc: `${BRAND.domain}/артисты/`, pri: '0.7' },
+    ...ARTIST_REGISTRY.map(a => ({ loc: `${BRAND.domain}${encodeURI(a.url)}`, pri: '0.7' })),
+    ...VENUE_REGISTRY.map(v => ({ loc: `${BRAND.domain}${encodeURI(v.url)}`, pri: '0.7' })),
     ...shows.map(s => ({ loc: `${BRAND.domain}${encodeURI(s._url)}`, pri: '0.8' })),
     ...STATIC_SLUGS.map(slug => ({ loc: `${BRAND.domain}/${slug}.html`, pri: '0.4' })),
   ];
@@ -1248,7 +1378,10 @@ img{max-width:100%;display:block}
 .pill{display:inline-block;background:rgba(109,31,75,.1);color:var(--plum);font-weight:700;
   padding:6px 14px;border-radius:999px;font-size:13px;margin-bottom:12px}
 .show-title{font-size:clamp(24px,4vw,36px);margin:0 0 10px;line-height:1.2;font-weight:800}
-.show-announce{color:var(--muted);font-size:18px;margin:0 0 20px}
+.show-announce{color:var(--muted);font-size:18px;margin:0 0 12px}
+.show-artist-link{margin:0 0 18px}
+.show-artist-link a{color:var(--plum);font-weight:700;font-size:15px}
+.show-artist-link a:hover{text-decoration:underline}
 .show-facts{display:flex;gap:26px;flex-wrap:wrap;margin-bottom:22px}
 .fact{display:flex;flex-direction:column;gap:2px}
 .fact-k{color:var(--muted);font-size:13px;font-weight:600}
@@ -1621,6 +1754,7 @@ function run() {
   const shows = loadShows();
   console.log(`· К обработке: ${shows.length} мероприятий`);
   assignShowUrls(shows);
+  assignHubs(shows);
 
   if (fs.existsSync(BRAND.outDir)) {
     fs.rmSync(BRAND.outDir, { recursive: true, force: true });
@@ -1635,12 +1769,14 @@ function run() {
   const hubCounts = buildHubPages(shows);
   const cityCounts = buildCityPages(shows);
   const artistCount = buildArtistsIndex(shows);
+  const artistPageCount = buildArtistPages();
+  const venuePageCount = buildVenuePages();
   buildSitemap(shows);
   buildAdsTxt();
 
   const totalSeances = shows.reduce((n, s) => n + ((s.Seances || []).length), 0);
   const secs = ((Date.now() - t0) / 1000).toFixed(2);
-  const totalHtml = shows.length + 2 + STATIC_SLUGS.length + HUB_PAGES.length + CITY_PAGES.length;
+  const totalHtml = shows.length + 2 + STATIC_SLUGS.length + HUB_PAGES.length + CITY_PAGES.length + artistPageCount + venuePageCount;
 
   console.log('· Созданные файлы:');
   console.log('  - dist/index.html  (главная)');
@@ -1652,6 +1788,8 @@ function run() {
   console.log(`  - Страницы городов (${CITY_PAGES.length}):`);
   CITY_PAGES.forEach(p => console.log(`      ${p.slug}/  (${cityCounts[p.slug]})`));
   console.log(`  - dist/артисты/index.html  (${artistCount} артистов)`);
+  console.log(`  - dist/artist/[slug]/  (${artistPageCount} страниц артистов)`);
+  console.log(`  - dist/venues/[slug]/  (${venuePageCount} страниц залов)`);
   console.log(`  - dist/sitemap.xml  (${totalHtml} URL), robots.txt, ads.txt`);
   console.log('────────────────────────────────────────');
   console.log(`  Мероприятий:   ${shows.length}`);
