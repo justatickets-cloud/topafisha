@@ -713,7 +713,7 @@ function buildArtistsIndex(shows) {
 
   const cards = artistShows.map(showCard).join('\n');
   const quickList = artistShows.map(s =>
-    `<li><a href="${esc(s._url)}">${escText(s.name)} — билеты</a></li>`).join('');
+    `<li><a href="${esc(artistUrlByName[s.name] || s._url)}">${escText(s.name)} — билеты</a></li>`).join('');
 
   const body = `
 <article class="hub">
