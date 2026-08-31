@@ -889,6 +889,7 @@ function buildVenuePages() {
 /* ==== новый слой рядом с сайтом билетов; не трогает существующее ==== */
 /* ==================================================================== */
 let MAGAZINE_ARTICLES = [];
+let NEWS_ARTICLES = [];
 
 function parseFrontmatter(raw) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
@@ -1245,6 +1246,7 @@ function buildMagazine(shows) {
     <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span class="current">Журнал</span></nav>
     <h1 class="hub-title">Журнал культуры и досуга</h1>
     <p class="hub-intro">Гиды по досугу, рекомендации на выходные и статьи о культуре от ТОП Афиша. Всё самое интересное о концертах, спектаклях и культурной жизни Израиля.</p>
+    <nav class="mag-subnav"><a class="mag-subnav-link" href="/magazine/news/">📰 Новости и обновления ›</a></nav>
     <div class="mag-grid">${cardsHtml}</div>
   </div>
 </article>`;
@@ -1261,6 +1263,180 @@ function buildMagazine(shows) {
 
   MAGAZINE_ARTICLES = articles;
   return articles.length;
+}
+
+/* ===================== Движок новостей и обновлений (News Engine) =====================
+   Независимый слой: короткие редакторские новостные заметки о культурной сцене,
+   привязанные к данным фида, чтобы ссылки были живыми, а информация — настоящей. */
+
+function newsPubDay(s) { return String(s.pubDate || '').slice(0, 10); }
+function firstSentenceRu(txt) {
+  const t = String(txt || '').replace(/\s+/g, ' ').trim();
+  if (!t) return '';
+  const m = t.match(/^(.{30,190}?[.!?…])(\s|$)/);
+  return m ? m[1].trim() : (t.length > 170 ? t.slice(0, 167).trim() + '…' : t);
+}
+function newsKicker(section) {
+  const s = section || '';
+  if (/дет|цирк|сказ|семь/i.test(s)) return 'Новости для детей и семьи';
+  if (/стендап|развлеч|комеди/i.test(s)) return 'Новости эстрады';
+  if (/танц|балет/i.test(s)) return 'Новости танца';
+  if (/классич|оркестр|опер|барокко/i.test(s)) return 'Новости классической музыки';
+  if (/мюзикл|театр|спектакл|пьес/i.test(s)) return 'Новости театра';
+  return 'Новости музыки';
+}
+function firstUpcomingSeance(s) {
+  const today = ymdStr(israelToday());
+  const list = [...(s.Seances || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  return list.find(z => String(z.date) >= today && z.link) || list.find(z => z.link) || list[0] || {};
+}
+
+function newsItems(shows) {
+  const items = [];
+  const withPub = shows.filter(s => s.pubDate && s.image && (s.Seances || []).length);
+  if (!withPub.length) return items;
+  const maxPub = withPub.reduce((m, s) => newsPubDay(s) > m ? newsPubDay(s) : m, '0000-00-00');
+  const thr = new Date(maxPub + 'T00:00:00'); thr.setDate(thr.getDate() - 21);
+  const thrStr = ymdStr(thr);
+  const fresh = withPub
+    .filter(s => newsPubDay(s) >= thrStr)
+    .sort((a, b) => String(b.pubDate).localeCompare(String(a.pubDate)))
+    .slice(0, 12);
+
+  for (const s of fresh) {
+    const se = firstUpcomingSeance(s);
+    const kicker = newsKicker(s.section);
+    const city = se.city ? ` в ${se.city}` : '';
+    const tpls = [
+      `${s.name} выходит на сцену${city}: билеты уже в продаже`,
+      `Анонс: ${s.name} приезжает${city}`,
+      `${s.name} — старт продаж билетов${city}`,
+    ];
+    const title = tpls[Number(s.id || 0) % tpls.length];
+    const lede = firstSentenceRu(s.announce || s.description) || `${s.name} присоединяется к нашей обновляемой афише.`;
+    const when = se.date ? `${formatDate(se.date)}${se.time ? ` в ${formatTime(se.time)}` : ''}` : '';
+    const venue = se.hall ? escText(se.hall + (se.city ? `, ${se.city}` : '')) : (se.city ? escText(se.city) : '');
+    const v = VENUE_REGISTRY.find(x => se.hall && x.hall === se.hall && x.shows.length > 0);
+    const venueHtml = v ? `<a href="${esc(v.url)}">${venue}</a>` : venue;
+    const buy = seanceSoldOut(se) ? '<span class="soldout">Билеты распроданы</span>'
+      : (se.link ? `<a class="news-cta" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>` : '');
+    const bodyHtml = `<p class="news-lede">${escText(lede)}</p>
+<p>${venueHtml ? `Мероприятие пройдёт в ${venueHtml}` : 'Мероприятие'}${when ? ` — ${escText(when)}` : ''}, и билеты уже открыты для бронирования. Все даты, цены и выбор мест — на полной странице мероприятия: <a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a>.</p>
+<p>${buy}</p>
+<p class="news-related">Ещё по теме: <a href="/">полная афиша</a> · <a href="/magazine/">все статьи журнала</a></p>`;
+    items.push({
+      slug: slugify(s.name),
+      kicker,
+      title,
+      date: newsPubDay(s),
+      description: `${kicker}: ${lede}`.slice(0, 155),
+      image: s.image,
+      bodyHtml,
+    });
+  }
+
+  const c2027 = shows.filter(s => (s.Seances || []).some(z => String(z.date).startsWith('2027'))).length;
+  if (c2027 >= 3) {
+    items.unshift({
+      slug: 'афиша-2027-открыта',
+      kicker: 'Горячая тема',
+      title: `Афиша 2027 набирает обороты: ${c2027} мероприятий уже открыты для брони`,
+      date: maxPub,
+      description: `Культурный сезон 2027 уже здесь: ${c2027} мероприятий и событий открыты для раннего бронирования.`,
+      image: (shows.find(s => (s.Seances || []).some(z => String(z.date).startsWith('2027')) && s.image) || {}).image || '',
+      bodyHtml: `<p class="news-lede">Культурный сезон 2027 уже начинает наполняться, и те, кто любит планировать заранее, уже могут занять места. ${c2027} мероприятий и событий открыты для раннего бронирования в нашей системе.</p>
+<p>От международных балетных премьер до гигантских концертов, фестивалей и оригинальных постановок — предложение на следующий год растёт каждую неделю. Ранняя подготовка окупается: лучшие места и привлекательные цены разбирают первыми.</p>
+<p>Полный обзор читайте в статьях <a href="/magazine/${encodeURI('лучшие-концерты-и-события-2027')}/">Лучшие концерты 2027</a> и <a href="/magazine/${encodeURI('фестивали-и-главные-события-2027')}/">Гид по фестивалям</a>, или переходите прямо к <a href="/афиша-2027.html"><strong>афише 2027</strong></a>.</p>
+<p class="news-related"><a href="/magazine/">все статьи журнала</a></p>`,
+    });
+  }
+  return items;
+}
+
+function newsArticlePage(a) {
+  const canonical = `${BRAND.domain}${a.url}`;
+  const crumb = breadcrumbSchema([
+    { name: 'Главная', url: BRAND.domain + '/' },
+    { name: 'Журнал', url: BRAND.domain + '/magazine/' },
+    { name: 'Новости', url: BRAND.domain + '/magazine/news/' },
+    { name: a.title, url: canonical },
+  ]);
+  const schema = {
+    '@context': 'https://schema.org', '@type': 'NewsArticle',
+    headline: a.title, description: a.description,
+    datePublished: a.date, dateModified: a.date,
+    image: a.image || undefined,
+    author: { '@type': 'Organization', name: BRAND.nameHe, url: BRAND.domain },
+    publisher: { '@type': 'Organization', name: BRAND.nameHe, url: BRAND.domain, logo: { '@type': 'ImageObject', url: BRAND.domain + '/assets/logo.svg' } },
+    mainEntityOfPage: canonical,
+  };
+  const body = `
+<article class="news-article">
+  <div class="wrap news-wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <a href="/magazine/">Журнал</a> <span>›</span> <a href="/magazine/news/">Новости</a> <span>›</span> <span class="current">${escText(a.title)}</span></nav>
+    <span class="news-kicker">${escText(a.kicker || 'Новости')}</span>
+    <h1 class="news-headline">${escText(a.title)}</h1>
+    <p class="news-dateline">Обновлено ${formatDate(a.date)} · ${escText(BRAND.nameHe)}</p>
+    ${a.image ? `<figure class="news-hero"><img src="${esc(a.image)}" alt="${esc(a.title)}"></figure>` : ''}
+    <div class="news-body rte">${a.bodyHtml}</div>
+    <p class="news-back"><a href="/magazine/news/">‹ ко всем новостям</a></p>
+  </div>
+</article>`;
+  const html = page({
+    title: `${a.title} | Новости ${BRAND.nameHe}`,
+    description: a.description,
+    canonical,
+    head: crumb + `\n<script type="application/ld+json">${JSON.stringify(schema)}</script>` + (a.image ? `\n<meta property="og:image" content="${esc(a.image)}">` : ''),
+    body,
+  });
+  const dir = path.join(BRAND.outDir, 'magazine', 'news', a.slug);
+  ensureDir(dir);
+  fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+}
+
+function buildNews(shows) {
+  const items = newsItems(shows);
+  const used = new Set();
+  items.forEach(a => {
+    let s = a.slug || 'news';
+    if (used.has(s)) s += '-' + (used.size);
+    used.add(s);
+    a.slug = s;
+    a.url = `/magazine/news/${s}/`;
+  });
+  items.forEach(newsArticlePage);
+
+  const cardsHtml = items.map(a => `
+    <article class="news-card">
+      <a class="news-card-media" href="${esc(a.url)}">${a.image ? `<img loading="lazy" src="${esc(a.image)}" alt="${esc(a.title)}">` : ''}</a>
+      <div class="news-card-body">
+        <span class="news-card-kicker">${escText(a.kicker || 'Новости')}</span>
+        <h3 class="news-card-title"><a href="${esc(a.url)}">${escText(a.title)}</a></h3>
+        <span class="news-card-date">${formatDate(a.date)}</span>
+      </div>
+    </article>`).join('\n');
+  const idxBody = `
+<article class="hub news-hub">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <a href="/magazine/">Журнал</a> <span>›</span> <span class="current">Новости</span></nav>
+    <h1 class="hub-title">Новости и обновления</h1>
+    <p class="hub-intro">Все горячие новости мира концертов, спектаклей и культуры в Израиле: анонсы новых мероприятий, старты продаж билетов и обновления афиши. Обновляется регулярно.</p>
+    <div class="news-grid">${cardsHtml || '<p>Сейчас нет свежих обновлений. Загляните позже.</p>'}</div>
+  </div>
+</article>`;
+  const idxHtml = page({
+    title: `Новости и обновления | ${BRAND.nameHe}`,
+    description: 'Новости и регулярные обновления из мира концертов и культуры в Израиле: анонсы мероприятий, старты продаж билетов и обновления афиши.',
+    canonical: BRAND.domain + '/magazine/news/',
+    head: breadcrumbSchema([{ name: 'Главная', url: BRAND.domain + '/' }, { name: 'Журнал', url: BRAND.domain + '/magazine/' }, { name: 'Новости', url: BRAND.domain + '/magazine/news/' }]),
+    body: idxBody,
+  });
+  const nd = path.join(BRAND.outDir, 'magazine', 'news');
+  ensureDir(nd);
+  fs.writeFileSync(path.join(nd, 'index.html'), idxHtml, 'utf8');
+
+  NEWS_ARTICLES = items;
+  return items.length;
 }
 
 /* ------------------------------ Главная страница -------------------------------- */
@@ -1610,6 +1786,8 @@ function buildSitemap(shows) {
     ...VENUE_REGISTRY.map(v => ({ loc: `${BRAND.domain}${v.url}`, pri: '0.7' })),
     { loc: `${BRAND.domain}/magazine/`, pri: '0.7' },
     ...MAGAZINE_ARTICLES.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.6' })),
+    { loc: `${BRAND.domain}/magazine/news/`, pri: '0.7' },
+    ...NEWS_ARTICLES.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.6' })),
     ...shows.map(s => ({ loc: `${BRAND.domain}${s._url}`, pri: '0.8' })),
     ...STATIC_SLUGS.map(slug => ({ loc: `${BRAND.domain}/${slug}.html`, pri: '0.4' })),
   ];
@@ -1876,6 +2054,38 @@ span.btn-soldout{cursor:default}
 .mag-card-desc{color:var(--muted);font-size:14px;margin:0;flex:1;
   display:-webkit-box;-webkit-line-clamp:3;line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
 .mag-card-link{color:var(--plum);font-weight:700;font-size:14px;margin-top:2px}
+.mag-subnav{margin:-6px 0 22px}
+.mag-subnav-link{display:inline-block;background:var(--plum);color:#fff;font-weight:700;font-size:15px;padding:9px 18px;border-radius:999px;text-decoration:none;box-shadow:var(--shadow-sm)}
+.mag-subnav-link:hover{background:var(--plum-d)}
+
+/* News Layout — раздел новостей */
+.news-hub{padding-block:6px 50px}
+.news-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:22px;margin-top:10px}
+.news-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;display:flex;flex-direction:column;box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .2s ease}
+.news-card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+.news-card-media{display:block;aspect-ratio:16/9;overflow:hidden;background:#efe9e2}
+.news-card-media img{width:100%;height:100%;object-fit:cover}
+.news-card-body{padding:14px 16px 16px;display:flex;flex-direction:column;gap:7px;flex:1}
+.news-card-kicker{color:var(--gold-d);font-size:11.5px;font-weight:800;letter-spacing:.5px}
+.news-card-title{font-size:17px;line-height:1.35;margin:0;flex:1}
+.news-card-title a{color:var(--ink);text-decoration:none}
+.news-card-title a:hover{color:var(--plum)}
+.news-card-date{color:var(--muted);font-size:12.5px;font-weight:600}
+.news-article{padding-block:6px 56px}
+.news-wrap{max-width:720px}
+.news-article .breadcrumb{padding-block:18px 2px}
+.news-kicker{display:inline-block;background:var(--gold);color:#fff;font-size:12.5px;font-weight:800;letter-spacing:.5px;padding:4px 12px;border-radius:999px;margin-bottom:8px}
+.news-headline{font-size:clamp(26px,4.5vw,38px);font-weight:800;line-height:1.22;margin:6px 0 8px}
+.news-dateline{color:var(--muted);font-size:14px;font-weight:600;margin:0 0 18px}
+.news-hero{margin:0 0 22px;border-radius:var(--radius);overflow:hidden}
+.news-hero img{width:100%;height:auto;display:block}
+.news-lede{font-size:19px;line-height:1.6;font-weight:600;color:var(--ink)}
+.news-body.rte p{margin:0 0 14px;line-height:1.75}
+.news-cta{display:inline-block;background:var(--plum);color:#fff;font-weight:800;padding:11px 22px;border-radius:999px;text-decoration:none;box-shadow:var(--shadow-sm)}
+.news-cta:hover{background:var(--plum-d)}
+.news-related{font-size:14px;color:var(--muted);border-top:1px solid var(--line);padding-top:14px;margin-top:20px}
+.news-back{margin-top:22px}
+.news-back a{color:var(--plum);font-weight:700;text-decoration:none}
 
 .mag-article{padding-block:6px 56px}
 .mag-wrap{max-width:760px}
@@ -2224,6 +2434,7 @@ function run() {
   const artistPageCount = buildArtistPages();
   const venuePageCount = buildVenuePages();
   const magazineCount = buildMagazine(shows);
+  const newsCount = buildNews(shows);
   buildRedirects();
   buildSitemap(shows);
   buildAdsTxt();
