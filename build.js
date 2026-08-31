@@ -1081,6 +1081,14 @@ function magArticlePage(a) {
     publisher: { '@type': 'Organization', name: BRAND.nameHe, url: BRAND.domain, logo: { '@type': 'ImageObject', url: BRAND.domain + '/assets/logo.svg' } },
     mainEntityOfPage: canonical,
   };
+  // Схема FAQPage для страниц вопросов и ответов (Rich Snippets)
+  const faqSchema = (a.faq && a.faq.length) ? {
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: a.faq.map(f => ({
+      '@type': 'Question', name: f.q,
+      acceptedAnswer: { '@type': 'Answer', text: f.aText || String(f.a || '').replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim() },
+    })),
+  } : null;
   const body = `
 <article class="mag-article">
   <div class="wrap mag-wrap">
@@ -1096,7 +1104,7 @@ function magArticlePage(a) {
     title: `${a.title} | Журнал ТОП Афиша`,
     description: a.description,
     canonical,
-    head: crumb + `\n<script type="application/ld+json">${JSON.stringify(articleSchema)}</script>` + (a.image ? `\n<meta property="og:image" content="${esc(a.image)}">` : ''),
+    head: crumb + `\n<script type="application/ld+json">${JSON.stringify(articleSchema)}</script>` + (faqSchema ? `\n<script type="application/ld+json">${JSON.stringify(faqSchema)}</script>` : '') + (a.image ? `\n<meta property="og:image" content="${esc(a.image)}">` : ''),
     body,
   });
   const dir = path.join(BRAND.outDir, 'magazine', a.slug);
@@ -1210,9 +1218,38 @@ ${list(music)}
   };
 }
 
+// Вечнозелёная страница вопросов и ответов (FAQ) — на основе официальных правил кассы
+function faqArticle() {
+  const faq = [
+    { q: 'Когда и как я получу билеты после заказа?', a: `На большинство мероприятий билеты электронные, со штрихкодом. Сразу после оплаты на указанный email приходит подтверждение заказа с кнопкой «Ваши билеты», при этом сами штрихкоды открываются в день мероприятия. Кроме того, за день до мероприятия ссылка на электронные билеты приходит SMS-сообщением на телефон, указанный в заказе. В любой момент билеты можно открыть и в разделе «Мои заказы» на сайте кассы. Физический самовывоз не требуется.` },
+    { q: 'Как заказать и оплатить, можно ли разбить на платежи?', a: `На странице мероприятия нажмите «Купить билеты». Есть два вида билетов: с местами, где вы выбираете кресло на схеме зала, или свободные, где вы выбираете количество билетов. Оплата возможна кредитной картой на сайте или по телефону, а также наличными в банке или банковским переводом. Страница оплаты надёжно защищена и зашифрована, а данные карты не сохраняются в системе. Оплату кредитной картой можно разбить на беспроцентные платежи.` },
+    { q: 'Какова политика отмены и возврата средств?', a: `Отменить заказ по собственной инициативе можно не позднее чем за <strong>8 календарных дней</strong> до даты мероприятия. Например, если мероприятие состоится 9-го числа, последний день отмены — 1-е число. При возврате денег удерживается комиссия за отмену в размере <strong>5% стоимости заказа, но не более 100 шекелей</strong>. Изменение даты, количества билетов или мест выполняется через полную отмену прежнего заказа и оформление нового.` },
+    { q: 'Что будет с билетами, если мероприятие отменили или перенесли?', a: `Касса уведомит вас по контактным данным, указанным в заказе. В разделе «Мои заказы» можно согласиться с изменениями или отменить заказ. При отмене или изменении мероприятия организатором <strong>полная сумма заказа возвращается</strong>.` },
+    { q: 'Я не смог попасть на мероприятие. Вернут ли мне деньги?', a: `Если мероприятие состоялось по плану, а вы не посетили его по собственной инициативе, стоимость неиспользованных билетов не возвращается.` },
+    { q: 'Есть ли скидки для военных, студентов или пенсионеров?', a: `Все виды билетов и цены, включая льготные категории, когда они предлагаются на конкретное мероприятие, показаны прямо на странице покупки билетов этого мероприятия. Информация на сайте едина для всех покупателей, поэтому рекомендуем проверить нужную страницу мероприятия в <a href="/">афише</a> — там отображаются все актуальные варианты билетов и цен.` },
+    { q: 'Я сделал заказ, но не получил подтверждение на email, что делать?', a: `Подтверждение отправляется автоматически сразу после оплаты. Если вы его не видите во «Входящих», проверьте папку «Спам» или «Нежелательная почта». Возможно также, что при оформлении был указан неверный адрес — в этом случае зайдите в раздел «Мои заказы» и вышлите купон себе повторно.` },
+    { q: 'Можно ли внести изменения в заказ?', a: `Данные получателя билетов можно изменить не позднее чем за <strong>24 часа</strong> до начала мероприятия — через раздел «Мои заказы», либо просто переслать подтверждение заказа другому человеку. Смена мест в уже оплаченном заказе выполняется через отмену прежнего заказа и оформление нового.` },
+    { q: 'По каким вопросам стоит звонить в службу поддержки?', a: `Вся информация о мероприятиях и билетах доступна на сайте в режиме реального времени: даты, места проведения, цены и наличие. Операторы не являются справочной службой — телефон предназначен в первую очередь для оплаты уже оформленного заказа или для его отмены. Перед звонком рекомендуем изучить страницу мероприятия, <a href="/артисты/">список артистов</a> или <a href="/">полную афишу</a>.` },
+  ];
+  const bodyHtml = `<p>Мы собрали для вас ответы на самые частые вопросы о покупке билетов, их получении, отменах и возвратах — на основе официальных правил системы бронирования. Так вы сможете заказывать с уверенностью и точно знать, чего ожидать на каждом этапе.</p>
+${faq.map(f => `<details class="faq-item"><summary>${escText(f.q)}</summary><div class="faq-answer">${f.a}</div></details>`).join('\n')}
+<p class="faq-foot">Не нашли ответ на свой вопрос? Вся актуальная информация по каждому мероприятию, включая цены, даты и наличие, находится на странице самого мероприятия в <a href="/">афише</a>.</p>`;
+  return {
+    slug: 'частые-вопросы-о-покупке-билетов',
+    schemaType: 'Article',
+    faq,
+    title: 'Частые вопросы о покупке билетов на мероприятия',
+    description: 'Всё, что нужно знать о покупке билетов, их получении, политике отмен и возвратов, скидках и связи со службой поддержки — по официальным правилам кассы.',
+    date: '2026-08-20',
+    author: BRAND.nameHe,
+    image: '',
+    bodyHtml,
+  };
+}
+
 function buildMagazine(shows) {
   const mdArticles = loadMdArticles();
-  const generated = [weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows)].filter(Boolean);
+  const generated = [weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows), faqArticle()].filter(Boolean);
   const genSlugs = new Set(generated.map(a => a.slug));
   let articles = [...generated, ...mdArticles.filter(a => !genSlugs.has(a.slug))];
   articles.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
@@ -2106,6 +2143,15 @@ span.btn-soldout{cursor:default}
 .mag-body figure img{width:100%;border-radius:var(--radius)}
 .mag-picks li{line-height:1.7}
 .mag-buy{white-space:nowrap;font-weight:700}
+.faq-item{border:1px solid var(--line);border-radius:12px;background:var(--card);margin:0 0 12px;overflow:hidden;box-shadow:var(--shadow-sm)}
+.faq-item summary{cursor:pointer;list-style:none;padding:16px 20px;font-weight:700;font-size:17px;color:var(--ink);position:relative;padding-inline-start:46px}
+.faq-item summary::-webkit-details-marker{display:none}
+.faq-item summary::before{content:"+";position:absolute;inset-inline-start:18px;top:50%;transform:translateY(-50%);width:22px;height:22px;line-height:22px;text-align:center;background:var(--plum);color:#fff;border-radius:50%;font-weight:800;font-size:16px}
+.faq-item[open] summary::before{content:"–"}
+.faq-item[open] summary{color:var(--plum)}
+.faq-answer{padding:0 20px 18px 20px;line-height:1.75;color:var(--ink)}
+.faq-answer a{color:var(--plum);font-weight:700}
+.faq-foot{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
 .mag-sect{color:var(--gold-d);font-weight:700;font-size:13px}
 .mag-note{display:block;margin-top:10px;padding:10px 14px;background:var(--bg);border-left:3px solid var(--gold);border-radius:6px;color:var(--muted);font-style:italic;font-size:14px}
 .mag-picks li{line-height:1.7;margin-bottom:4px}
