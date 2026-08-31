@@ -892,6 +892,7 @@ function buildVenuePages() {
 let MAGAZINE_ARTICLES = [];
 let NEWS_ARTICLES = [];
 let LANDING_PAGES = [];
+let LANDING_REDIRECTS = [];
 
 function parseFrontmatter(raw) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
@@ -1510,42 +1511,42 @@ function buildLandingPages(shows) {
   const ctx = landingContext();
   const CONCERT = /Концерт|Джаз|Мюзикл/i;
   const defs = [
-    { slug: 'koncerty-tel-aviv-2026', h1: 'Концерты в Тель-Авиве 2026',
+    { slug: 'Концерты-Тель-Авив-2026', from: 'koncerty-tel-aviv-2026', h1: 'Концерты в Тель-Авиве 2026',
       title: 'Концерты Тель-Авив 2026 — афиша и билеты',
       desc: 'Полная афиша концертов в Тель-Авиве на 2026 год: актуальные даты, залы и цены. Покупка билетов онлайн в одном месте.',
       intro: 'Все музыкальные концерты, которые пройдут в Тель-Авиве в 2026 году. Выбирайте дату, зал и цену и заказывайте билеты онлайн.',
       f: { sectionRe: CONCERT, cityRe: TLV_RE, dateTest: d => d.startsWith('2026') } },
-    { slug: 'muzykalnye-koncerty-v-izraile-2026', h1: 'Музыкальные концерты в Израиле 2026',
+    { slug: 'Музыкальные-концерты-в-Израиле-2026', from: 'muzykalnye-koncerty-v-izraile-2026', h1: 'Музыкальные концерты в Израиле 2026',
       title: 'Музыкальные концерты в Израиле 2026 — афиша',
       desc: 'Афиша музыкальных концертов по всему Израилю на 2026 год: поп, рок, классика, джаз и мюзиклы. Актуальные даты и билеты.',
       intro: 'Лучшие музыкальные концерты по всему Израилю в 2026 году — от классики и джаза до больших эстрадных шоу и мюзиклов.',
       f: { sectionRe: CONCERT, dateTest: d => d.startsWith('2026') } },
-    { slug: 'afisha-tel-aviv', h1: 'Афиша Тель-Авив: концерты и мероприятия',
+    { slug: 'Афиша-Тель-Авив', from: 'afisha-tel-aviv', h1: 'Афиша Тель-Авив: концерты и мероприятия',
       title: 'Афиша Тель-Авив — концерты, спектакли, мероприятия',
       desc: 'Полная афиша Тель-Авива: концерты, спектакли, детские шоу и мероприятия. Ближайшие даты, залы и билеты онлайн.',
       intro: 'Полная афиша Тель-Авива на ближайшее время — концерты, спектакли, детские шоу и другие мероприятия города.',
       f: { cityRe: TLV_RE, dateTest: (d, c) => d >= c.today } },
-    { slug: 'koncert-v-tel-avive-segodnya', h1: 'Концерт в Тель-Авиве сегодня',
+    { slug: 'Концерт-в-Тель-Авиве-сегодня', from: 'koncert-v-tel-avive-segodnya', h1: 'Концерт в Тель-Авиве сегодня',
       title: 'Концерт в Тель-Авиве сегодня — афиша на сегодня',
       desc: 'Какие концерты проходят в Тель-Авиве сегодня: актуальный список на сегодняшний день с залами, ценами и билетами.',
       intro: 'Концерты, которые проходят в Тель-Авиве сегодня. Список обновляется автоматически каждый день.',
       f: { sectionRe: CONCERT, cityRe: TLV_RE, dateTest: (d, c) => d === c.today } },
-    { slug: 'meropriyatiya-v-tel-avive-segodnya', h1: 'Мероприятия в Тель-Авиве сегодня',
+    { slug: 'Мероприятия-в-Тель-Авиве-сегодня', from: 'meropriyatiya-v-tel-avive-segodnya', h1: 'Мероприятия в Тель-Авиве сегодня',
       title: 'Мероприятия в Тель-Авиве сегодня — что происходит',
       desc: 'Все мероприятия в Тель-Авиве сегодня: концерты, спектакли и шоу на сегодняшний день, с актуальными билетами.',
       intro: 'Все мероприятия Тель-Авива на сегодня — концерты, спектакли и шоу. Список обновляется автоматически.',
       f: { cityRe: TLV_RE, dateTest: (d, c) => d === c.today } },
-    { slug: 'meropriyatiya-v-tel-avive-zavtra', h1: 'Мероприятия в Тель-Авиве завтра',
+    { slug: 'Мероприятия-в-Тель-Авиве-завтра', from: 'meropriyatiya-v-tel-avive-zavtra', h1: 'Мероприятия в Тель-Авиве завтра',
       title: 'Мероприятия в Тель-Авиве завтра — афиша на завтра',
       desc: 'Афиша Тель-Авива на завтра: концерты, спектакли и мероприятия следующего дня, с залами, ценами и билетами.',
       intro: 'Все мероприятия Тель-Авива на завтра — планируйте вечер заранее и заказывайте билеты онлайн.',
       f: { cityRe: TLV_RE, dateTest: (d, c) => d === c.tomorrow } },
-    { slug: 'kuda-poyti-v-tel-avive-v-subbotu', h1: 'Куда пойти в Тель-Авиве в субботу',
+    { slug: 'Куда-пойти-в-Тель-Авиве-в-субботу', from: 'kuda-poyti-v-tel-avive-v-subbotu', h1: 'Куда пойти в Тель-Авиве в субботу',
       title: 'Куда пойти в Тель-Авиве в субботу — афиша выходных',
       desc: 'Идеи, куда пойти в Тель-Авиве в субботу: концерты, спектакли и мероприятия ближайшей субботы с билетами онлайн.',
       intro: 'Лучшие идеи, куда пойти в Тель-Авиве в ближайшую субботу — концерты, спектакли и семейные шоу на выходные.',
       f: { cityRe: TLV_RE, dateTest: (d, c) => d === c.saturday } },
-    { slug: 'bilety-na-koncerty-v-izraile', h1: 'Билеты на концерты в Израиле',
+    { slug: 'Билеты-на-концерты-в-Израиле', from: 'bilety-na-koncerty-v-izraile', h1: 'Билеты на концерты в Израиле',
       title: 'Билеты на концерты в Израиле — афиша и покупка',
       desc: 'Билеты на концерты в Израиле: полная афиша ближайших музыкальных событий по всей стране, безопасная покупка онлайн.',
       intro: 'Билеты на ближайшие концерты по всему Израилю — классика, джаз, эстрада и мюзиклы. Актуальные даты и безопасная покупка.',
@@ -1601,6 +1602,7 @@ function buildLandingPages(shows) {
     results.push({ slug: def.slug, url, title: def.h1, description: def.desc });
   }
   LANDING_PAGES = results;
+  LANDING_REDIRECTS = defs.filter(d => d.from).map(d => ({ from: d.from, to: d.slug }));
   return results.length;
 }
 
@@ -2590,7 +2592,7 @@ const A11Y_JS = `(function(){
 // Файл _redirects для Cloudflare Pages: 301 со старых английских слагов магазина на новые
 function buildRedirects() {
   const lines = [];
-  for (const m of MAGAZINE_REDIRECTS) {
+  for (const m of [...MAGAZINE_REDIRECTS, ...LANDING_REDIRECTS]) {
     const dest = `/magazine/${encodeURI(m.to)}/`;
     lines.push(`/magazine/${m.from} ${dest} 301`);
     lines.push(`/magazine/${m.from}/ ${dest} 301`);
