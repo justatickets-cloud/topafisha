@@ -254,6 +254,7 @@ function siteHeader() {
     <nav class="top-nav">
       <a href="/">Все мероприятия</a>
       <a href="/артисты/">Артисты</a>
+      <a href="/magazine/">Журнал</a>
       <a href="${esc(BRAND.altSite)}" class="lang-switch" hreflang="he" title="עברית">עברית</a>
     </nav>
   </div>
@@ -882,6 +883,183 @@ function buildVenuePages() {
   return VENUE_REGISTRY.length;
 }
 
+/* ==================================================================== */
+/* ========= Журнал культуры и досуга — независимая система ========= */
+/* ==== новый слой рядом с сайтом билетов; не трогает существующее ==== */
+/* ==================================================================== */
+let MAGAZINE_ARTICLES = [];
+
+function parseFrontmatter(raw) {
+  const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
+  if (!m) return { meta: {}, body: raw };
+  const meta = {};
+  m[1].split(/\r?\n/).forEach(line => {
+    const i = line.indexOf(':');
+    if (i > -1) meta[line.slice(0, i).trim()] = line.slice(i + 1).trim().replace(/^["']|["']$/g, '');
+  });
+  return { meta, body: m[2] };
+}
+
+function mdToHtml(md) {
+  const e = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  const inline = s => e(s)
+    .replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '<img src="$2" alt="$1" loading="lazy">')
+    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2">$1</a>')
+    .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*([^*]+)\*/g, '<em>$1</em>');
+  return md.trim().split(/\r?\n\r?\n+/).map(b => {
+    b = b.trim();
+    if (/^### /.test(b)) return `<h3>${inline(b.slice(4))}</h3>`;
+    if (/^## /.test(b)) return `<h2>${inline(b.slice(3))}</h2>`;
+    if (/^# /.test(b)) return `<h2>${inline(b.slice(2))}</h2>`;
+    if (/^> /.test(b)) return `<blockquote>${inline(b.replace(/^> ?/gm, ''))}</blockquote>`;
+    if (/^([-*]) /.test(b)) return `<ul>${b.split(/\r?\n/).map(li => `<li>${inline(li.replace(/^[-*] /, ''))}</li>`).join('')}</ul>`;
+    if (/^!\[[^\]]*\]\([^)]+\)$/.test(b)) return `<figure>${inline(b)}</figure>`;
+    return `<p>${inline(b)}</p>`;
+  }).join('\n');
+}
+
+function loadMdArticles() {
+  const dir = path.join(__dirname, 'content', 'magazine');
+  if (!fs.existsSync(dir)) return [];
+  return fs.readdirSync(dir).filter(f => f.endsWith('.md')).map(f => {
+    const { meta, body } = parseFrontmatter(fs.readFileSync(path.join(dir, f), 'utf8'));
+    const bodyHtml = mdToHtml(body);
+    return {
+      slug: meta.slug || slugify(meta.title || f.replace(/\.md$/, '')),
+      title: meta.title || 'Без названия',
+      description: meta.description || stripTags(bodyHtml).slice(0, 155),
+      date: meta.date || new Date().toISOString().slice(0, 10),
+      author: meta.author || BRAND.nameHe,
+      image: meta.image || '',
+      bodyHtml,
+    };
+  });
+}
+
+function weekendArticle(shows) {
+  const now = israelToday();
+  const day = now.getDay();
+  const toThu = (day >= 4) ? -(day - 4) : (4 - day);
+  const thu = addDays(now, toThu);
+  const wk = [ymdStr(thu), ymdStr(addDays(thu, 1)), ymdStr(addDays(thu, 2))];
+  const wkSet = new Set(wk);
+  const picks = shows.filter(s => (s.Seances || []).some(z => wkSet.has(z.date))).slice(0, 12);
+  if (!picks.length) return null;
+  const range = `${formatDate(wk[0])} — ${formatDate(wk[2])}`;
+  const items = picks.map(s => {
+    const se = (s.Seances || []).find(z => wkSet.has(z.date)) || {};
+    const buy = seanceSoldOut(se) ? ' <span class="soldout">Билеты распроданы</span>'
+      : ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>`;
+    return `<li><a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a> — ${formatDate(se.date)}${se.city ? ', ' + escText(se.city) : ''}${se.hall ? ' · ' + escText(se.hall) : ''}.${buy}</li>`;
+  }).join('\n');
+  return {
+    slug: 'куда-пойти-на-выходных',
+    title: `Куда пойти на выходных? Гид по мероприятиям ${range}`,
+    description: `Лучшие концерты, спектакли и мероприятия на ближайшие выходные в Израиле (${range}). Актуальные даты и билеты.`,
+    date: ymdStr(now),
+    author: BRAND.nameHe,
+    image: (picks.find(s => s.image) || {}).image || '',
+    bodyHtml: `<p>Выходные уже близко, и мы собрали для вас лучшие концерты, спектакли и мероприятия, которые проходят ${range}. Выбирайте идеальный вариант досуга и легко покупайте билеты.</p>
+<h2>Рекомендуем на выходные</h2>
+<ul class="mag-picks">${items}</ul>
+<p>Полный список всех мероприятий выходных смотрите на <a href="/афиша-на-выходные.html">странице афиши на выходные</a>.</p>`,
+  };
+}
+
+function magArticlePage(a) {
+  const canonical = `${BRAND.domain}${a.url}`;
+  const crumb = breadcrumbSchema([
+    { name: 'Главная', url: BRAND.domain + '/' },
+    { name: 'Журнал', url: BRAND.domain + '/magazine/' },
+    { name: a.title, url: canonical },
+  ]);
+  const articleSchema = {
+    '@context': 'https://schema.org',
+    '@type': 'NewsArticle',
+    headline: a.title,
+    description: a.description,
+    datePublished: a.date,
+    dateModified: a.date,
+    image: a.image || undefined,
+    author: { '@type': 'Organization', name: BRAND.nameHe, url: BRAND.domain },
+    publisher: { '@type': 'Organization', name: BRAND.nameHe, url: BRAND.domain, logo: { '@type': 'ImageObject', url: BRAND.domain + '/assets/logo.svg' } },
+    mainEntityOfPage: canonical,
+  };
+  const body = `
+<article class="mag-article">
+  <div class="wrap mag-wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <a href="/magazine/">Журнал</a> <span>›</span> <span class="current">${escText(a.title)}</span></nav>
+    <h1 class="mag-title">${escText(a.title)}</h1>
+    <p class="mag-byline">${escText(a.author)} · ${formatDate(a.date)}</p>
+    ${a.image ? `<figure class="mag-hero"><img src="${esc(a.image)}" alt="${esc(a.title)}"></figure>` : ''}
+    <div class="mag-body rte">${a.bodyHtml}</div>
+    <p class="mag-back"><a href="/magazine/">‹ Назад в журнал</a></p>
+  </div>
+</article>`;
+  const html = page({
+    title: `${a.title} | Журнал ТОП Афиша`,
+    description: a.description,
+    canonical,
+    head: crumb + `\n<script type="application/ld+json">${JSON.stringify(articleSchema)}</script>` + (a.image ? `\n<meta property="og:image" content="${esc(a.image)}">` : ''),
+    body,
+  });
+  const dir = path.join(BRAND.outDir, 'magazine', a.slug);
+  ensureDir(dir);
+  fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+}
+
+function buildMagazine(shows) {
+  let articles = loadMdArticles();
+  const wk = weekendArticle(shows);
+  if (wk) articles = [wk, ...articles.filter(a => a.slug !== wk.slug)];
+  articles.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+
+  const used = new Set();
+  articles.forEach(a => {
+    let s = a.slug || 'article';
+    if (used.has(s)) s += '-2';
+    used.add(s);
+    a.slug = s;
+    a.url = `/magazine/${s}/`;
+  });
+
+  articles.forEach(magArticlePage);
+
+  const cardsHtml = articles.map(a => `
+    <article class="mag-card">
+      <a class="mag-card-media" href="${esc(a.url)}">${a.image ? `<img loading="lazy" src="${esc(a.image)}" alt="${esc(a.title)}">` : ''}</a>
+      <div class="mag-card-body">
+        <span class="mag-card-date">${formatDate(a.date)}</span>
+        <h3 class="mag-card-title"><a href="${esc(a.url)}">${escText(a.title)}</a></h3>
+        <p class="mag-card-desc">${escText(a.description)}</p>
+        <a class="mag-card-link" href="${esc(a.url)}">Читать далее ›</a>
+      </div>
+    </article>`).join('\n');
+  const idxBody = `
+<article class="hub mag-index">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span class="current">Журнал</span></nav>
+    <h1 class="hub-title">Журнал культуры и досуга</h1>
+    <p class="hub-intro">Гиды по досугу, рекомендации на выходные и статьи о культуре от ТОП Афиша. Всё самое интересное о концертах, спектаклях и культурной жизни Израиля.</p>
+    <div class="mag-grid">${cardsHtml}</div>
+  </div>
+</article>`;
+  const idxHtml = page({
+    title: 'Журнал культуры и досуга | ТОП Афиша',
+    description: 'Гиды по досугу, рекомендации на выходные и статьи о культуре. Журнал ТОП Афиша.',
+    canonical: BRAND.domain + '/magazine/',
+    head: breadcrumbSchema([{ name: 'Главная', url: BRAND.domain + '/' }, { name: 'Журнал', url: BRAND.domain + '/magazine/' }]),
+    body: idxBody,
+  });
+  const md = path.join(BRAND.outDir, 'magazine');
+  ensureDir(md);
+  fs.writeFileSync(path.join(md, 'index.html'), idxHtml, 'utf8');
+
+  MAGAZINE_ARTICLES = articles;
+  return articles.length;
+}
+
 /* ------------------------------ Главная страница -------------------------------- */
 function buildIndex(shows) {
   const sections = [...new Set(shows.map(s => s.section).filter(Boolean))];
@@ -1227,6 +1405,8 @@ function buildSitemap(shows) {
     { loc: `${BRAND.domain}/артисты/`, pri: '0.7' },
     ...ARTIST_REGISTRY.map(a => ({ loc: `${BRAND.domain}${encodeURI(a.url)}`, pri: '0.7' })),
     ...VENUE_REGISTRY.map(v => ({ loc: `${BRAND.domain}${encodeURI(v.url)}`, pri: '0.7' })),
+    { loc: `${BRAND.domain}/magazine/`, pri: '0.7' },
+    ...MAGAZINE_ARTICLES.map(a => ({ loc: `${BRAND.domain}${encodeURI(a.url)}`, pri: '0.6' })),
     ...shows.map(s => ({ loc: `${BRAND.domain}${encodeURI(s._url)}`, pri: '0.8' })),
     ...STATIC_SLUGS.map(slug => ({ loc: `${BRAND.domain}/${slug}.html`, pri: '0.4' })),
   ];
@@ -1477,6 +1657,44 @@ span.btn-soldout{cursor:default}
 .static-body h2{font-size:20px;font-weight:800;margin:26px 0 10px}
 .static-body p{margin:0 0 14px}
 .static-body a{color:var(--plum);text-decoration:underline}
+
+/* ===== magazine (editorial layout) ===== */
+.mag-index{padding-block:6px 50px}
+.mag-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));gap:26px;margin-top:8px}
+.mag-card{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);overflow:hidden;
+  display:flex;flex-direction:column;box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .2s ease}
+.mag-card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
+.mag-card-media{display:block;aspect-ratio:16/9;overflow:hidden;background:#efe9e2}
+.mag-card-media img{width:100%;height:100%;object-fit:cover}
+.mag-card-body{padding:16px 18px 18px;display:flex;flex-direction:column;gap:8px;flex:1}
+.mag-card-date{color:var(--gold-d);font-size:12.5px;font-weight:700;text-transform:uppercase;letter-spacing:.4px}
+.mag-card-title{font-size:19px;margin:0;line-height:1.3;font-weight:800}
+.mag-card-title a:hover{color:var(--plum)}
+.mag-card-desc{color:var(--muted);font-size:14px;margin:0;flex:1;
+  display:-webkit-box;-webkit-line-clamp:3;line-clamp:3;-webkit-box-orient:vertical;overflow:hidden}
+.mag-card-link{color:var(--plum);font-weight:700;font-size:14px;margin-top:2px}
+
+.mag-article{padding-block:6px 56px}
+.mag-wrap{max-width:760px}
+.mag-article .breadcrumb{padding-block:18px 2px}
+.mag-title{font-size:clamp(28px,5vw,42px);font-weight:800;line-height:1.2;margin:8px 0 10px}
+.mag-byline{color:var(--muted);font-size:14.5px;margin:0 0 22px}
+.mag-hero{margin:0 0 26px;border-radius:var(--radius);overflow:hidden;box-shadow:var(--shadow)}
+.mag-hero img{width:100%;height:auto;display:block}
+.mag-body{font-size:18px;line-height:1.9;color:#2c2536}
+.mag-body h2{font-size:24px;font-weight:800;margin:32px 0 12px;color:var(--ink);line-height:1.25}
+.mag-body h3{font-size:20px;font-weight:700;margin:24px 0 10px}
+.mag-body p{margin:0 0 18px}
+.mag-body a{color:var(--plum);text-decoration:underline}
+.mag-body ul{margin:0 0 18px;padding-inline-start:22px;display:flex;flex-direction:column;gap:10px}
+.mag-body blockquote{margin:0 0 18px;padding:12px 18px;border-inline-start:4px solid var(--gold);
+  background:#faf7f3;border-radius:0 10px 10px 0;color:#4a4356}
+.mag-body figure{margin:0 0 22px}
+.mag-body figure img{width:100%;border-radius:var(--radius)}
+.mag-picks li{line-height:1.7}
+.mag-buy{white-space:nowrap;font-weight:700}
+.mag-back{margin-top:30px;padding-top:20px;border-top:1px solid var(--line)}
+.mag-back a{color:var(--plum);font-weight:700}
 @media(max-width:860px){
   .footer-grid{grid-template-columns:1fr 1fr;gap:30px}
   .foot-desc{max-width:none}
@@ -1786,6 +2004,7 @@ function run() {
   const artistCount = buildArtistsIndex(shows);
   const artistPageCount = buildArtistPages();
   const venuePageCount = buildVenuePages();
+  const magazineCount = buildMagazine(shows);
   buildSitemap(shows);
   buildAdsTxt();
 
