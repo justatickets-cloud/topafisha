@@ -891,6 +891,7 @@ function buildVenuePages() {
 /* ==================================================================== */
 let MAGAZINE_ARTICLES = [];
 let NEWS_ARTICLES = [];
+let LANDING_PAGES = [];
 
 function parseFrontmatter(raw) {
   const m = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?([\s\S]*)$/.exec(raw);
@@ -1286,6 +1287,10 @@ function buildMagazine(shows) {
     <p class="hub-intro">Гиды по досугу, рекомендации на выходные и статьи о культуре от ТОП Афиша. Всё самое интересное о концертах, спектаклях и культурной жизни Израиля.</p>
     <nav class="mag-subnav"><a class="mag-subnav-link" href="/magazine/news/">📰 Новости и обновления ›</a></nav>
     <div class="mag-grid">${cardsHtml}</div>
+    ${LANDING_PAGES.length ? `<section class="landing-picks">
+      <h2 class="landing-picks-title">Популярные подборки</h2>
+      <div class="landing-picks-grid">${LANDING_PAGES.map(p => `<a class="landing-pick" href="${esc(p.url)}">${escText(p.title)} ›</a>`).join('\n')}</div>
+    </section>` : ''}
   </div>
 </article>`;
   const idxHtml = page({
@@ -1475,6 +1480,128 @@ function buildNews(shows) {
 
   NEWS_ARTICLES = items;
   return items.length;
+}
+
+/* ===================== SEO-лендинги внутри журнала =====================
+   8 целевых страниц под точные поисковые запросы, с автофильтрацией из фида. */
+const TLV_RE = /Тель-Авив/;
+function landingContext() {
+  const t = israelToday();
+  const day = t.getDay(); // 0=вс … 6=сб
+  const untilSat = (6 - day + 7) % 7;
+  return { today: ymdStr(t), tomorrow: ymdStr(addDays(t, 1)), saturday: ymdStr(addDays(t, untilSat)) };
+}
+function landingMatch(shows, { sectionRe, cityRe, dateTest }, ctx) {
+  const out = [];
+  for (const s of shows) {
+    if (sectionRe && !sectionRe.test(s.section || '')) continue;
+    let nd = null;
+    for (const z of (s.Seances || [])) {
+      if (cityRe && !cityRe.test(z.city || '')) continue;
+      if (!dateTest(String(z.date || ''), ctx)) continue;
+      if (nd === null || String(z.date) < nd) nd = String(z.date);
+    }
+    if (nd !== null) out.push({ s, nd });
+  }
+  out.sort((a, b) => a.nd.localeCompare(b.nd));
+  return out.map(x => x.s);
+}
+function buildLandingPages(shows) {
+  const ctx = landingContext();
+  const CONCERT = /Концерт|Джаз|Мюзикл/i;
+  const defs = [
+    { slug: 'koncerty-tel-aviv-2026', h1: 'Концерты в Тель-Авиве 2026',
+      title: 'Концерты Тель-Авив 2026 — афиша и билеты',
+      desc: 'Полная афиша концертов в Тель-Авиве на 2026 год: актуальные даты, залы и цены. Покупка билетов онлайн в одном месте.',
+      intro: 'Все музыкальные концерты, которые пройдут в Тель-Авиве в 2026 году. Выбирайте дату, зал и цену и заказывайте билеты онлайн.',
+      f: { sectionRe: CONCERT, cityRe: TLV_RE, dateTest: d => d.startsWith('2026') } },
+    { slug: 'muzykalnye-koncerty-v-izraile-2026', h1: 'Музыкальные концерты в Израиле 2026',
+      title: 'Музыкальные концерты в Израиле 2026 — афиша',
+      desc: 'Афиша музыкальных концертов по всему Израилю на 2026 год: поп, рок, классика, джаз и мюзиклы. Актуальные даты и билеты.',
+      intro: 'Лучшие музыкальные концерты по всему Израилю в 2026 году — от классики и джаза до больших эстрадных шоу и мюзиклов.',
+      f: { sectionRe: CONCERT, dateTest: d => d.startsWith('2026') } },
+    { slug: 'afisha-tel-aviv', h1: 'Афиша Тель-Авив: концерты и мероприятия',
+      title: 'Афиша Тель-Авив — концерты, спектакли, мероприятия',
+      desc: 'Полная афиша Тель-Авива: концерты, спектакли, детские шоу и мероприятия. Ближайшие даты, залы и билеты онлайн.',
+      intro: 'Полная афиша Тель-Авива на ближайшее время — концерты, спектакли, детские шоу и другие мероприятия города.',
+      f: { cityRe: TLV_RE, dateTest: (d, c) => d >= c.today } },
+    { slug: 'koncert-v-tel-avive-segodnya', h1: 'Концерт в Тель-Авиве сегодня',
+      title: 'Концерт в Тель-Авиве сегодня — афиша на сегодня',
+      desc: 'Какие концерты проходят в Тель-Авиве сегодня: актуальный список на сегодняшний день с залами, ценами и билетами.',
+      intro: 'Концерты, которые проходят в Тель-Авиве сегодня. Список обновляется автоматически каждый день.',
+      f: { sectionRe: CONCERT, cityRe: TLV_RE, dateTest: (d, c) => d === c.today } },
+    { slug: 'meropriyatiya-v-tel-avive-segodnya', h1: 'Мероприятия в Тель-Авиве сегодня',
+      title: 'Мероприятия в Тель-Авиве сегодня — что происходит',
+      desc: 'Все мероприятия в Тель-Авиве сегодня: концерты, спектакли и шоу на сегодняшний день, с актуальными билетами.',
+      intro: 'Все мероприятия Тель-Авива на сегодня — концерты, спектакли и шоу. Список обновляется автоматически.',
+      f: { cityRe: TLV_RE, dateTest: (d, c) => d === c.today } },
+    { slug: 'meropriyatiya-v-tel-avive-zavtra', h1: 'Мероприятия в Тель-Авиве завтра',
+      title: 'Мероприятия в Тель-Авиве завтра — афиша на завтра',
+      desc: 'Афиша Тель-Авива на завтра: концерты, спектакли и мероприятия следующего дня, с залами, ценами и билетами.',
+      intro: 'Все мероприятия Тель-Авива на завтра — планируйте вечер заранее и заказывайте билеты онлайн.',
+      f: { cityRe: TLV_RE, dateTest: (d, c) => d === c.tomorrow } },
+    { slug: 'kuda-poyti-v-tel-avive-v-subbotu', h1: 'Куда пойти в Тель-Авиве в субботу',
+      title: 'Куда пойти в Тель-Авиве в субботу — афиша выходных',
+      desc: 'Идеи, куда пойти в Тель-Авиве в субботу: концерты, спектакли и мероприятия ближайшей субботы с билетами онлайн.',
+      intro: 'Лучшие идеи, куда пойти в Тель-Авиве в ближайшую субботу — концерты, спектакли и семейные шоу на выходные.',
+      f: { cityRe: TLV_RE, dateTest: (d, c) => d === c.saturday } },
+    { slug: 'bilety-na-koncerty-v-izraile', h1: 'Билеты на концерты в Израиле',
+      title: 'Билеты на концерты в Израиле — афиша и покупка',
+      desc: 'Билеты на концерты в Израиле: полная афиша ближайших музыкальных событий по всей стране, безопасная покупка онлайн.',
+      intro: 'Билеты на ближайшие концерты по всему Израилю — классика, джаз, эстрада и мюзиклы. Актуальные даты и безопасная покупка.',
+      f: { sectionRe: CONCERT, dateTest: (d, c) => d >= c.today } },
+  ];
+
+  const results = [];
+  for (const def of defs) {
+    let matched = landingMatch(shows, def.f, ctx).slice(0, 60);
+    let fallbackNote = '';
+    if (!matched.length) {
+      // вечнозелёный запас: ближайшие события в Тель-Авиве (или в Израиле)
+      const fb = landingMatch(shows, { cityRe: def.f.cityRe || null, dateTest: (d, c) => d >= c.today }, ctx);
+      matched = fb.slice(0, 12);
+      fallbackNote = `<p class="landing-empty">На выбранную дату мероприятий пока не найдено. Ниже — ближайшие события, которые не стоит пропустить.</p>`;
+    }
+    const url = `/magazine/${def.slug}/`;
+    const canonical = BRAND.domain + url;
+    const cards = matched.map(showCard).join('\n');
+    const itemList = {
+      '@context': 'https://schema.org', '@type': 'ItemList',
+      itemListElement: matched.slice(0, 15).map((s, i) => ({
+        '@type': 'ListItem', position: i + 1, url: BRAND.domain + s._url, name: s.name,
+      })),
+    };
+    const crumb = breadcrumbSchema([
+      { name: 'Главная', url: BRAND.domain + '/' },
+      { name: 'Журнал', url: BRAND.domain + '/magazine/' },
+      { name: def.h1, url: canonical },
+    ]);
+    const body = `
+<article class="hub landing-page">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <a href="/magazine/">Журнал</a> <span>›</span> <span class="current">${escText(def.h1)}</span></nav>
+    <h1 class="hub-title">${escText(def.h1)}</h1>
+    <p class="hub-intro">${escText(def.intro)}</p>
+    <p class="landing-count">Найдено мероприятий: <strong>${matched.length}</strong></p>
+    ${fallbackNote}
+    <div class="grid card-grid">${cards || '<p>Скоро здесь появятся мероприятия. Загляните позже.</p>'}</div>
+    <p class="landing-related">Смотрите также: <a href="/">полную афишу</a> · <a href="/афиша-2027.html">афишу 2027</a> · <a href="/magazine/">журнал</a> · <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">частые вопросы о билетах</a></p>
+  </div>
+</article>`;
+    const html = page({
+      title: def.title + ' | ТОП Афиша',
+      description: def.desc,
+      canonical,
+      head: crumb + `\n<script type="application/ld+json">${JSON.stringify(itemList)}</script>`,
+      body,
+    });
+    const dir = path.join(BRAND.outDir, 'magazine', def.slug);
+    ensureDir(dir);
+    fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+    results.push({ slug: def.slug, url, title: def.h1, description: def.desc });
+  }
+  LANDING_PAGES = results;
+  return results.length;
 }
 
 /* ------------------------------ Главная страница -------------------------------- */
@@ -1826,6 +1953,7 @@ function buildSitemap(shows) {
     ...VENUE_REGISTRY.map(v => ({ loc: `${BRAND.domain}${v.url}`, pri: '0.7' })),
     { loc: `${BRAND.domain}/magazine/`, pri: '0.7' },
     ...MAGAZINE_ARTICLES.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.6' })),
+    ...LANDING_PAGES.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.8' })),
     { loc: `${BRAND.domain}/magazine/news/`, pri: '0.7' },
     ...NEWS_ARTICLES.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.6' })),
     ...shows.map(s => ({ loc: `${BRAND.domain}${s._url}`, pri: '0.8' })),
@@ -2097,6 +2225,15 @@ span.btn-soldout{cursor:default}
 .mag-subnav{margin:-6px 0 22px}
 .mag-subnav-link{display:inline-block;background:var(--plum);color:#fff;font-weight:700;font-size:15px;padding:9px 18px;border-radius:999px;text-decoration:none;box-shadow:var(--shadow-sm)}
 .mag-subnav-link:hover{background:var(--plum-d)}
+.landing-picks{margin-top:40px;padding-top:28px;border-top:1px solid var(--line)}
+.landing-picks-title{font-size:22px;font-weight:800;margin:0 0 16px}
+.landing-picks-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px}
+.landing-pick{display:block;background:var(--card);border:1px solid var(--line);border-radius:12px;padding:14px 18px;font-weight:700;font-size:15px;color:var(--ink);text-decoration:none;box-shadow:var(--shadow-sm);transition:transform .15s ease,box-shadow .2s ease,color .15s ease}
+.landing-pick:hover{transform:translateY(-3px);box-shadow:var(--shadow);color:var(--plum)}
+.landing-page{padding-block:6px 50px}
+.landing-count{color:var(--muted);font-size:15px;margin:4px 0 18px}
+.landing-empty{background:var(--bg);border-left:3px solid var(--gold);border-radius:6px;padding:10px 14px;color:var(--muted);font-style:italic;font-size:14px;margin:0 0 18px}
+.landing-related{margin-top:26px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:14px}
 
 /* News Layout — раздел новостей */
 .news-hub{padding-block:6px 50px}
@@ -2486,6 +2623,7 @@ function run() {
   const artistCount = buildArtistsIndex(shows);
   const artistPageCount = buildArtistPages();
   const venuePageCount = buildVenuePages();
+  const landingCount = buildLandingPages(shows);
   const magazineCount = buildMagazine(shows);
   const newsCount = buildNews(shows);
   buildRedirects();
