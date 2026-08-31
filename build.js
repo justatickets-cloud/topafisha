@@ -967,6 +967,81 @@ function weekendArticle(shows) {
   };
 }
 
+// Гид для детей и семьи на выходные (авто, с разбивкой по городам)
+const KIDS_SECTIONS = new Set(['Спектакли для детей', 'Музыка для детей', 'Час рассказа', 'Цирк', 'Парки и аттракции']);
+function familyWeekendArticle(shows) {
+  const now = israelToday();
+  const day = now.getDay();
+  const toThu = (day >= 4) ? -(day - 4) : (4 - day);
+  const thu = addDays(now, toThu);
+  const wk = [ymdStr(thu), ymdStr(addDays(thu, 1)), ymdStr(addDays(thu, 2))];
+  const wkSet = new Set(wk);
+  const picks = shows.filter(s => KIDS_SECTIONS.has(s.section) && (s.Seances || []).some(z => wkSet.has(z.date)));
+  if (!picks.length) return null;
+  const byCity = {};
+  picks.forEach(s => {
+    const se = (s.Seances || []).find(z => wkSet.has(z.date)) || {};
+    const city = se.city || 'Другое';
+    (byCity[city] = byCity[city] || []).push({ s, se });
+  });
+  const range = `${formatDate(wk[0])} — ${formatDate(wk[2])}`;
+  const sections = Object.keys(byCity).sort((a, b) => a.localeCompare(b, 'ru')).map(city => {
+    const items = byCity[city].map(({ s, se }) => {
+      const buy = seanceSoldOut(se) ? ' <span class="soldout">Билеты распроданы</span>'
+        : ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>`;
+      return `<li><a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a> — ${formatDate(se.date)}${se.hall ? ' · ' + escText(se.hall) : ''}.${buy}</li>`;
+    }).join('\n');
+    return `<h2>${escText(city)}</h2>\n<ul class="mag-picks">${items}</ul>`;
+  }).join('\n');
+  return {
+    slug: 'family-events-weekend',
+    title: `Гид для детей и семьи на выходные — ${range}`,
+    description: `Все детские и семейные мероприятия на ближайшие выходные в Израиле (${range}), с разбивкой по городам. Актуальные даты и билеты.`,
+    date: ymdStr(now),
+    author: BRAND.nameHe,
+    image: (picks.find(s => s.image) || {}).image || '',
+    bodyHtml: `<p>Ищете, чем заняться всей семьёй на выходных? Мы собрали все детские спектакли, семейные шоу и аттракции, которые проходят ${range}, с разбивкой по городам — чтобы вы легко нашли, что происходит рядом с вами.</p>\n${sections}\n<p>Все мероприятия выходных для всех возрастов смотрите на <a href="/афиша-на-выходные.html">странице афиши на выходные</a>.</p>`,
+  };
+}
+
+// Вечнозелёный гид по залам — со ссылками на страницы залов
+function venuesSeatingGuide() {
+  const top = [...VENUE_REGISTRY].sort((a, b) => b.shows.length - a.shows.length).slice(0, 10);
+  const venueLinks = top.map(v =>
+    `<li><a href="${esc(v.url)}"><strong>${escText(v.hall)}</strong></a>${v.city ? ' — ' + escText(v.city) : ''} · ${v.shows.length} ближайших мероприятий</li>`).join('\n');
+  const image = (top[0] && (top[0].shows.find(s => s.image) || {}).image) || '';
+  const bodyHtml = `<p>Правильный выбор места может полностью изменить впечатление от концерта или спектакля. Мы подготовили профессиональный гид, который поможет выбрать удачные места в ведущих залах и дворцах культуры Израиля.</p>
+
+<h2>Принципы выбора места</h2>
+
+<h3>Близко к сцене (первые ряды)</h3>
+<p>Передние ряды дают камерное впечатление и максимальную близость к артисту, особенно подходят для сольных концертов, стендапа и танцевальных шоу. Минус: иногда крутой угол обзора, а в больших залах сложно охватить всю картину.</p>
+
+<h3>Центр зала (средние ряды)</h3>
+<p>Как правило, лучший баланс: удобный угол обзора, оптимальное расстояние до сцены, а на концертах — лучшее качество звука, так как система обычно настроена на центр. Рекомендуемый выбор для большинства мероприятий.</p>
+
+<h3>Балкон и задние ряды</h3>
+<p>Дают общий широкий обзор сцены по более доступной цене и отлично подходят для мюзиклов, оперы и масштабных визуальных шоу, где важно видеть всю картину. В залах с амфитеатром видно прекрасно и сверху.</p>
+
+<h2>Советы по типам площадок</h2>
+<p><strong>Открытые площадки и амфитеатры</strong> (например, амфитеатр Кейсарии): приходите заранее, возьмите тёплую одежду на вечер и выбирайте центральные места для лучшей акустики. <strong>Закрытые дворцы культуры</strong> (например, Дворец культуры Тель-Авив): почти везде хорошая видимость и звук, центр предпочтителен для концертов. <strong>Клубы</strong> (например, Заппа): камерная атмосфера, иногда есть стоячие места — уточняйте заранее.</p>
+
+<h2>Ведущие залы у нас</h2>
+<p>Нажмите на любой зал, чтобы увидеть его полную ближайшую афишу:</p>
+<ul class="mag-picks">${venueLinks}</ul>
+<p>Ищете конкретное мероприятие? Зайдите на <a href="/">главную страницу</a> и отфильтруйте по залу, городу или дате.</p>`;
+  return {
+    slug: 'venues-seating-guide',
+    schemaType: 'Article',
+    title: 'Гид по залам: как выбрать места в ведущих залах Израиля',
+    description: 'Профессиональный гид по выбору мест в ведущих залах и дворцах культуры Израиля, с советами по типам площадок и ссылками на афиши.',
+    date: '2026-08-15',
+    author: BRAND.nameHe,
+    image,
+    bodyHtml,
+  };
+}
+
 function magArticlePage(a) {
   const canonical = `${BRAND.domain}${a.url}`;
   const crumb = breadcrumbSchema([
@@ -976,7 +1051,7 @@ function magArticlePage(a) {
   ]);
   const articleSchema = {
     '@context': 'https://schema.org',
-    '@type': 'NewsArticle',
+    '@type': a.schemaType || 'NewsArticle',
     headline: a.title,
     description: a.description,
     datePublished: a.date,
@@ -1010,9 +1085,10 @@ function magArticlePage(a) {
 }
 
 function buildMagazine(shows) {
-  let articles = loadMdArticles();
-  const wk = weekendArticle(shows);
-  if (wk) articles = [wk, ...articles.filter(a => a.slug !== wk.slug)];
+  const mdArticles = loadMdArticles();
+  const generated = [weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide()].filter(Boolean);
+  const genSlugs = new Set(generated.map(a => a.slug));
+  let articles = [...generated, ...mdArticles.filter(a => !genSlugs.has(a.slug))];
   articles.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
 
   const used = new Set();
