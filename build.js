@@ -324,6 +324,7 @@ function siteFooter() {
     <div class="footer-legal-links">
       <a href="/privacy.html">Политика конфиденциальности</a> ·
       <a href="/terms.html">Условия использования</a> ·
+      <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Вопросы и помощь</a> ·
       <a href="/contact.html">Контакты</a>
     </div>
     <div class="foot-disclaimer">Покупка билетов | Информация, расписание и билеты регулярно обновляются.</div>
@@ -1048,7 +1049,7 @@ function venuesSeatingGuide() {
 <h2>Ведущие залы у нас</h2>
 <p>Нажмите на любой зал, чтобы увидеть его полную ближайшую афишу:</p>
 <ul class="mag-picks">${venueLinks}</ul>
-<p>Ищете конкретное мероприятие? Зайдите на <a href="/">главную страницу</a> и отфильтруйте по залу, городу или дате.</p>`;
+<p>Ищете конкретное мероприятие? Зайдите на <a href="/">главную страницу</a> и отфильтруйте по залу, городу или дате. Есть вопросы об отмене, ценах или получении билетов? Все ответы — в <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">гиде по частым вопросам</a>.</p>`;
   return {
     slug: 'гид-по-залам-где-лучше-сидеть',
     redirectFrom: 'venues-seating-guide',
@@ -1204,7 +1205,7 @@ ${list(music)}
 
 <h2>Почему стоит бронировать билеты уже сейчас</h2>
 <p>Сезон 2027 уже открыт для бронирования, и ранняя подготовка окупается. На востребованные шоу лучшие места разбирают первыми, а цены растут ближе к дате события. Ранняя покупка гарантирует вам не просто билет, а правильное место: центр зала для лучшего баланса звука или передние ряды для камерного впечатления. Перед покупкой стоит заглянуть в наш <a href="/magazine/${encodeURI('гид-по-залам-где-лучше-сидеть')}/">гид по залам</a>, чтобы выбрать, где именно сидеть.</p>
-<p>Полный и обновляемый список всех событий смотрите в <a href="/афиша-2027.html">афише 2027</a> или перейдите на <a href="/">главную страницу</a> и отфильтруйте по артисту, залу, городу и дате.</p>`;
+<p>Полный и обновляемый список всех событий смотрите в <a href="/афиша-2027.html">афише 2027</a> или перейдите на <a href="/">главную страницу</a> и отфильтруйте по артисту, залу, городу и дате. Перед покупкой стоит заглянуть в <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">частые вопросы о покупке билетов</a>.</p>`;
 
   return {
     slug: 'лучшие-концерты-и-события-2027',
@@ -1754,6 +1755,7 @@ function buildShow(show) {
         <span class="aside-price-v${sold ? ' soldout' : ''}">${sold ? 'Билеты распроданы' : priceLabel(show.priceMin, show.priceMax)}</span>
         ${sold ? `<span class="btn btn-soldout btn-block">Билеты распроданы</span>` : `<a class="btn btn-primary btn-block" href="#seances">Выбрать дату</a>`}
         <p class="aside-note">${sold ? 'Мероприятие распродано' : 'Покупка билетов'}</p>
+        <p class="faq-hint">Вопросы об отмене или получении билетов? <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Гид по частым вопросам ›</a></p>
       </div>
     </aside>
   </div>
@@ -1770,6 +1772,7 @@ function buildShow(show) {
         </tbody>
       </table>
     </div>
+    <p class="faq-hint faq-hint-center">Вопросы об отмене или получении билетов? <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Читайте гид по частым вопросам ›</a></p>
   </section>
 </article>`;
 
@@ -2152,6 +2155,10 @@ span.btn-soldout{cursor:default}
 .faq-answer{padding:0 20px 18px 20px;line-height:1.75;color:var(--ink)}
 .faq-answer a{color:var(--plum);font-weight:700}
 .faq-foot{margin-top:22px;padding-top:16px;border-top:1px solid var(--line);color:var(--muted);font-size:15px}
+.faq-hint{font-size:13px;color:var(--muted);margin:10px 0 0;line-height:1.5;opacity:.85}
+.faq-hint a{color:var(--muted);text-decoration:underline;font-weight:600}
+.faq-hint a:hover{color:var(--plum);opacity:1}
+.faq-hint-center{text-align:center;margin-top:18px}
 .mag-sect{color:var(--gold-d);font-weight:700;font-size:13px}
 .mag-note{display:block;margin-top:10px;padding:10px 14px;background:var(--bg);border-left:3px solid var(--gold);border-radius:6px;color:var(--muted);font-style:italic;font-size:14px}
 .mag-picks li{line-height:1.7;margin-bottom:4px}
