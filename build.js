@@ -1286,18 +1286,19 @@ function buildMagazine(shows) {
     <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span class="current">Журнал</span></nav>
     <h1 class="hub-title">Журнал культуры и досуга</h1>
     <p class="hub-intro">Гиды по досугу, рекомендации на выходные и статьи о культуре от ТОП Афиша. Всё самое интересное о концертах, спектаклях и культурной жизни Израиля.</p>
-    ${LANDING_PAGES.length ? `<section class="feat-section">
-      <h2 class="feat-heading">Популярные подборки</h2>
-      <div class="feat-grid">${LANDING_PAGES.map(p => `<a class="feat-card" href="${esc(p.url)}">
-        <span class="feat-media">${p.image ? `<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}</span>
-        <span class="feat-body">
-          <span class="feat-title">${escText(p.title)}</span>
-          <span class="feat-count">${p.count} мероприятий ›</span>
-        </span>
-      </a>`).join('\n')}</div>
-    </section>` : ''}
+    ${LANDING_PAGES.length ? `<h2 class="mag-section-title">Популярные подборки</h2>
+    <div class="mag-grid">${LANDING_PAGES.map(p => `
+      <article class="mag-card">
+        <a class="mag-card-media" href="${esc(p.url)}">${p.image ? `<img loading="lazy" src="${esc(p.image)}" alt="${esc(p.title)}">` : ''}</a>
+        <div class="mag-card-body">
+          <span class="mag-card-date">${formatDate(ymdStr(israelToday()))}</span>
+          <h3 class="mag-card-title"><a href="${esc(p.url)}">${escText(p.title)}</a></h3>
+          <p class="mag-card-desc">${escText(p.description)}</p>
+          <a class="mag-card-link" href="${esc(p.url)}">Читать далее ›</a>
+        </div>
+      </article>`).join('\n')}</div>` : ''}
     <nav class="mag-subnav"><a class="mag-subnav-link" href="/magazine/news/">📰 Новости и обновления ›</a></nav>
-    <h2 class="feat-heading">Статьи и гиды</h2>
+    <h2 class="mag-section-title">Статьи и гиды</h2>
     <div class="mag-grid">${cardsHtml}</div>
   </div>
 </article>`;
@@ -2235,17 +2236,8 @@ span.btn-soldout{cursor:default}
 .mag-subnav{margin:-6px 0 22px}
 .mag-subnav-link{display:inline-block;background:var(--plum);color:#fff;font-weight:700;font-size:15px;padding:9px 18px;border-radius:999px;text-decoration:none;box-shadow:var(--shadow-sm)}
 .mag-subnav-link:hover{background:var(--plum-d)}
-.feat-section{margin:8px 0 34px}
-.feat-heading{font-size:22px;font-weight:800;margin:0 0 16px}
-.feat-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:18px}
-.feat-card{position:relative;display:block;aspect-ratio:16/10;border-radius:14px;overflow:hidden;text-decoration:none;box-shadow:var(--shadow-sm);background:var(--plum);transition:transform .16s ease,box-shadow .22s ease}
-.feat-card:hover{transform:translateY(-4px);box-shadow:var(--shadow)}
-.feat-media{position:absolute;inset:0;display:block}
-.feat-media img{width:100%;height:100%;object-fit:cover;transition:transform .3s ease}
-.feat-card:hover .feat-media img{transform:scale(1.06)}
-.feat-body{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:flex-end;gap:4px;padding:16px;background:linear-gradient(to top,rgba(30,10,25,.88) 0%,rgba(30,10,25,.45) 45%,rgba(30,10,25,.05) 100%)}
-.feat-title{color:#fff;font-weight:800;font-size:17px;line-height:1.25;text-shadow:0 1px 4px rgba(0,0,0,.4)}
-.feat-count{color:var(--gold);font-weight:700;font-size:13px;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.mag-section-title{font-size:22px;font-weight:800;margin:26px 0 16px}
+.mag-index .mag-section-title:first-of-type{margin-top:8px}
 .landing-page{padding-block:6px 50px}
 .landing-count{color:var(--muted);font-size:15px;margin:4px 0 18px}
 .landing-empty{background:var(--bg);border-left:3px solid var(--gold);border-radius:6px;padding:10px 14px;color:var(--muted);font-style:italic;font-size:14px;margin:0 0 18px}
