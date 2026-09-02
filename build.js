@@ -673,6 +673,13 @@ const CITY_PAGES = [
   },
 ];
 
+// Карта город -> страница города (для внутренней перелинковки со страниц мероприятий)
+const cityUrlByCity = {};
+CITY_PAGES.forEach(c => { cityUrlByCity[c.city] = `/${c.slug}/`; });
+
+// Плавающая кнопка покупки для страниц-хабов (только мобильные) — прокрутка к сетке результатов
+const HUB_STICKY = `<div class="mobile-cta"><a class="mobile-cta-btn" href="#results">Все мероприятия и билеты ›</a></div>`;
+
 function buildCityPages(shows) {
   const results = {};
   CITY_PAGES.forEach(cfg => {
@@ -685,19 +692,22 @@ function buildCityPages(shows) {
       { name: cfg.h1, url: canonical },
     ]);
     const cards = matched.map(showCard).join('\n');
+    const aiLede = `В этом разделе собраны ${matched.length} концертов, спектаклей и мероприятий, которые проходят в ${cfg.city}, с актуальными датами, залами и ценами. Билеты на все события можно заказать прямо на странице.`;
 
     const body = `
 <article class="hub">
   <div class="wrap">
     <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span class="current">${escText(cfg.h1)}</span></nav>
     <h1 class="hub-title">${escText(cfg.h1)}</h1>
+    <p class="show-lead">${escText(aiLede)}</p>
     <p class="hub-intro">${escText(cfg.intro)}</p>
     <div class="results-head">
       <span class="results-count">Найдено: ${matched.length}</span>
     </div>
-    ${matched.length ? `<div class="grid">\n${cards}\n</div>` : hubEmpty()}
+    ${matched.length ? `<div class="grid" id="results">\n${cards}\n</div>` : hubEmpty()}
   </div>
-</article>`;
+</article>
+${matched.length ? HUB_STICKY : ''}`;
 
     const html = page({ title: cfg.title, description: cfg.desc, canonical, head: crumb, body });
     const dir = path.join(BRAND.outDir, cfg.slug);
@@ -706,6 +716,61 @@ function buildCityPages(shows) {
     results[cfg.slug] = matched.length;
   });
   return results;
+}
+
+// ===================== Жанровые хабы (Genre Hubs) =====================
+// Страница-хаб для каждого жанра под /[category]/index.html — динамическая группировка из фида
+let GENRE_PAGES = []; // { slug, url, section, count }
+function buildGenrePages(shows) {
+  const bySlug = {};
+  shows.forEach(s => {
+    if (!s.section) return;
+    const slug = categorySlug(s.section);
+    (bySlug[slug] = bySlug[slug] || { list: [], sections: {} });
+    bySlug[slug].list.push(s);
+    bySlug[slug].sections[s.section] = (bySlug[slug].sections[s.section] || 0) + 1;
+  });
+  GENRE_PAGES = [];
+  const results = {};
+  Object.keys(bySlug).forEach(slug => {
+    const { list, sections } = bySlug[slug];
+    if (!list.length) return;
+    const section = Object.keys(sections).sort((a, b) => sections[b] - sections[a])[0];
+    const url = `/${slug}/`;
+    const canonical = BRAND.domain + url;
+    const h1 = `${section}: билеты и афиша в Израиле`;
+    const title = `${section} — билеты и афиша 2026 | ТОП Афиша`;
+    const desc = `Все мероприятия в категории «${section}» в Израиле в одном месте. Актуальные даты, залы, цены и безопасная покупка билетов.`;
+    const aiLede = `В этом разделе собраны ${list.length} мероприятий в категории «${section}», которые проходят в Израиле, с актуальными датами, залами и ценами. Билеты на все события можно заказать прямо на странице.`;
+    const cards = list.map(showCard).join('\n');
+    const crumb = breadcrumbSchema([
+      { name: 'Главная', url: BRAND.domain + '/' },
+      { name: section, url: canonical },
+    ]);
+    const collection = { '@context': 'https://schema.org', '@type': 'CollectionPage', name: h1, url: canonical, description: desc };
+    const body = `
+<article class="hub">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span class="current">${escText(section)}</span></nav>
+    <h1 class="hub-title">${escText(h1)}</h1>
+    <p class="show-lead">${escText(aiLede)}</p>
+    <div class="results-head"><span class="results-count">Найдено: ${list.length}</span></div>
+    <div class="grid" id="results">\n${cards}\n</div>
+  </div>
+</article>
+${HUB_STICKY}`;
+    const html = page({
+      title, description: desc, canonical,
+      head: crumb + `\n<script type="application/ld+json">${JSON.stringify(collection)}</script>`,
+      body,
+    });
+    const dir = path.join(BRAND.outDir, slug);
+    ensureDir(dir);
+    fs.writeFileSync(path.join(dir, 'index.html'), html, 'utf8');
+    results[slug] = list.length;
+    GENRE_PAGES.push({ slug, url, section, count: list.length });
+  });
+  return GENRE_PAGES.length;
 }
 
 /* ---------------------- Индекс артистов (Artists Hub) -------------------- */
@@ -876,16 +941,19 @@ function buildVenuePages() {
       },
     };
     const loc = [v.address, v.city].filter(Boolean).join(', ');
+    const aiLede = `В этом разделе собраны ${v.shows.length} ближайших мероприятий в зале ${v.hall}${v.city ? `, ${v.city}` : ''}, с актуальными датами, ценами и билетами. Билеты на все события можно заказать прямо на странице.`;
     const body = `
 <article class="hub">
   <div class="wrap">
     <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span>Залы</span> <span>›</span> <span class="current">${escText(v.hall)}</span></nav>
     <h1 class="hub-title">${escText(v.hall)}</h1>
+    <p class="show-lead">${escText(aiLede)}</p>
     <p class="hub-intro">Афиша ближайших мероприятий в зале ${escText(v.hall)}${loc ? ' · ' + escText(loc) : ''}. Актуальные даты, цены и билеты в реальном времени.</p>
     <div class="results-head"><span class="results-count">Найдено: ${v.shows.length}</span></div>
-    ${v.shows.length ? `<div class="grid">\n${cards}\n</div>` : hubEmpty()}
+    ${v.shows.length ? `<div class="grid" id="results">\n${cards}\n</div>` : hubEmpty()}
   </div>
-</article>`;
+</article>
+${v.shows.length ? HUB_STICKY : ''}`;
     const html = page({
       title: `${v.hall} — афиша и билеты | ТОП Афиша`,
       description: `Все ближайшие мероприятия в зале ${v.hall}${v.city ? ', ' + v.city : ''}. Актуальные даты, цены и безопасная покупка билетов.`,
@@ -1883,7 +1951,7 @@ function buildShow(show) {
 
   const body = `
 <nav class="breadcrumb wrap">
-  <a href="/">Главная</a> <span>›</span> <span>${escText(show.section)}</span> <span>›</span> <span class="current">${escText(show.name)}</span>
+  <a href="/">Главная</a> <span>›</span> <a href="/${categorySlug(show.section)}/">${escText(show.section)}</a> <span>›</span> <span class="current">${escText(show.name)}</span>
 </nav>
 
 <article class="show">
@@ -1899,7 +1967,7 @@ function buildShow(show) {
         ${artistUrlByName[show.name] ? `<p class="show-artist-link"><a href="${esc(artistUrlByName[show.name])}">Все концерты ${escText(show.name)} ›</a></p>` : ''}
         <div class="show-facts">
           <div class="fact"><span class="fact-k">Даты</span><span class="fact-v">${formatDate(show.dateFrom)}</span></div>
-          <div class="fact"><span class="fact-k">Место</span><span class="fact-v">${escText(cities.join(' · ') || 'уточняется')}</span></div>
+          <div class="fact"><span class="fact-k">Место</span><span class="fact-v">${cities.length ? cities.map(c => cityUrlByCity[c] ? `<a href="${cityUrlByCity[c]}">${escText(c)}</a>` : escText(c)).join(' · ') : 'уточняется'}</span></div>
           <div class="fact"><span class="fact-k">Цена</span><span class="fact-v">${priceLabel(show.priceMin, show.priceMax)}</span></div>
         </div>
         ${sold ? `<span class="btn btn-soldout btn-lg">Билеты распроданы</span>` : `<a class="btn btn-primary btn-lg" href="#seances">Заказать билеты</a>`}
@@ -1987,6 +2055,7 @@ function buildSitemap(shows) {
     { loc: BRAND.domain + '/', pri: '1.0' },
     ...HUB_PAGES.map(p => ({ loc: `${BRAND.domain}/${p.slug}.html`, pri: '0.9' })),
     ...CITY_PAGES.map(p => ({ loc: `${BRAND.domain}/${p.slug}/`, pri: '0.9' })),
+    ...GENRE_PAGES.map(p => ({ loc: `${BRAND.domain}${p.url}`, pri: '0.8' })),
     { loc: `${BRAND.domain}/артисты/`, pri: '0.7' },
     ...ARTIST_REGISTRY.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.7' })),
     ...VENUE_REGISTRY.map(v => ({ loc: `${BRAND.domain}${v.url}`, pri: '0.7' })),
@@ -2665,6 +2734,7 @@ function run() {
   buildStaticPages();
   const hubCounts = buildHubPages(shows);
   const cityCounts = buildCityPages(shows);
+  const genreCount = buildGenrePages(shows);
   const artistCount = buildArtistsIndex(shows);
   const artistPageCount = buildArtistPages();
   const venuePageCount = buildVenuePages();
