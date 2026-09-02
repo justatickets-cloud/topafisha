@@ -141,6 +141,7 @@ function categorySlug(section) { return CATEGORY_SLUGS[section] || 'events'; }
 // Слаг из названия: оставляет буквы/цифры, пробелы и дефисы -> один дефис
 function slugify(str) {
   return String(str || '')
+    .replace(/&nbsp;|&#160;|&#x0*a0;| /gi, ' ') // неразрывные пробелы / скрытые entities → обычный пробел
     .normalize('NFC')
     .replace(/[^\p{L}\p{N}\s-]/gu, '')
     .trim()
