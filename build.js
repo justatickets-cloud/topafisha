@@ -148,13 +148,27 @@ function slugify(str) {
     .replace(/^-+|-+$/g, '');
 }
 
+// Ограничение длины сегмента пути по БАЙТАМ (Linux/ext4 лимит имени папки — 255 байт;
+// кириллица в UTF-8 = 2 байта на символ). Обрезаем по границе символа, без разрыва.
+function capSlugBytes(str, maxBytes) {
+  if (Buffer.byteLength(str, 'utf8') <= maxBytes) return str;
+  let out = '', bytes = 0;
+  for (const ch of str) {
+    const b = Buffer.byteLength(ch, 'utf8');
+    if (bytes + b > maxBytes) break;
+    out += ch; bytes += b;
+  }
+  return out.replace(/-+$/, '');
+}
+
 // Назначает каждому мероприятию путь (_dir) и URL (_url)
 function assignShowUrls(shows) {
   const used = new Set();
   const SUFFIX = 'билеты-и-расписание';
   for (const s of shows) {
     const cat = categorySlug(s.section);
-    const nameSlug = slugify(s.name) || String(s.id);
+    // ограничиваем имя до 150 байт, чтобы весь сегмент (имя + суффикс + id) не превысил лимит ФС
+    const nameSlug = capSlugBytes(slugify(s.name) || String(s.id), 150);
     let rel = `${cat}/${nameSlug}-${SUFFIX}`;
     if (used.has(rel)) rel = `${cat}/${nameSlug}-${s.id}-${SUFFIX}`;
     used.add(rel);
@@ -769,7 +783,7 @@ function assignHubs(shows) {
   shows.forEach(s => { if (isCleanArtist(s.name)) (byArtist[s.name] = byArtist[s.name] || []).push(s); });
   const aUsed = new Set();
   ARTIST_REGISTRY = Object.keys(byArtist).sort((a, b) => a.localeCompare(b, 'ru')).map(name => {
-    let slug = slugify(name) || 'artist';
+    let slug = capSlugBytes(slugify(name) || 'artist', 150);
     if (aUsed.has(slug)) slug += '-' + byArtist[name][0].id;
     aUsed.add(slug);
     const url = `/artist/${slug}/`;
@@ -783,7 +797,7 @@ function assignHubs(shows) {
   const vUsed = new Set();
   VENUE_REGISTRY = Object.keys(byHall).filter(h => byHall[h].length >= 2)
     .sort((a, b) => a.localeCompare(b, 'ru')).map(hall => {
-      let slug = slugify(hall) || 'venue';
+      let slug = capSlugBytes(slugify(hall) || 'venue', 150);
       if (vUsed.has(slug)) slug += '-' + byHall[hall][0].id;
       vUsed.add(slug);
       const url = `/venues/${slug}/`;
@@ -1377,7 +1391,7 @@ function newsItems(shows) {
 <p>${buy}</p>
 <p class="news-related">Ещё по теме: <a href="/">полная афиша</a> · <a href="/magazine/">все статьи журнала</a></p>`;
     items.push({
-      slug: slugify(s.name),
+      slug: capSlugBytes(slugify(s.name), 150),
       kicker,
       title,
       date: newsPubDay(s),
