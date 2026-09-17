@@ -720,6 +720,45 @@ ${matched.length ? HUB_STICKY : ''}`;
 
 // ===================== Жанровые хабы (Genre Hubs) =====================
 // Страница-хаб для каждого жанра под /[category]/index.html — динамическая группировка из фида
+/* ---- Уникальный SEO-контент для страниц жанров (формула Value Equation + Grand Slam) ---- */
+// Ключ: slug из CATEGORY_SLUGS. Если для жанра нет текста, блок не выводится (тихий fallback).
+const GENRE_SEO = {
+  'standup': {
+    h2: `Вечер, после которого будет болеть живот от смеха: все стендап-шоу Израиля`,
+    lead: `Нужна передышка от рутины? Мы собрали самых смешных комиков страны для вечера чистого веселья, от политического стендапа до абсурдного юмора и импров-вечеров. Вы приходите смеяться, об остальном заботимся мы.`,
+    points: [
+      [`Найдите шоу за секунды:`, `Шоу на сегодня, завтра, выходные или на весь 2026 и 2027 год, по жанру, городу или залу. Всё в одном месте, без беготни по сайтам.`],
+      [`Покупка со спокойной душой:`, `Полностью защищённая оплата, официальные билеты и точный выбор мест. Электронный билет приходит на почту за минуту.`],
+      [`Лучшие места разбирают первыми:`, `Популярные шоу раскупают быстро, а первые ряды уходят раньше всех.`],
+    ],
+    cta: `Выберите своё шоу и займите место, пока не разобрали. Листайте вниз, и билеты у вас.`,
+  },
+  'ballet-dance': {
+    h2: `Мир танца и балета: волшебные спектакли, гарантированные билеты`,
+    lead: `Следующий блистательный спектакль уже выходит на сцену, и вы должны быть там. Мы собрали лучшие спектакли танца, классического балета, фламенко и современной хореографии в Израиле.`,
+    points: [
+      [`Большие постановки со всего мира:`, `От «Золушки» и «Лебединого озера» до мировых премьер и международных фестивалей.`],
+      [`Полное спокойствие:`, `Безопасная покупка, точный выбор мест и электронные билеты, которые приходят прямо вам на почту.`],
+    ],
+    cta: `Билеты в лучшие ряды заканчиваются быстро. Листайте вниз, выберите спектакль и займите место.`,
+  },
+};
+// Пока включаем только те жанры, что уже утверждены.
+const GENRE_SEO_ENABLED = new Set(['standup', 'ballet-dance']);
+function genreSeoBlock(slug) {
+  if (!GENRE_SEO_ENABLED.has(slug)) return '';
+  const c = GENRE_SEO[slug];
+  if (!c) return '';
+  const points = (c.points || []).map(p =>
+    `<p><strong>${escText(p[0])}</strong> ${escText(p[1])}</p>`).join('\n      ');
+  return `<div class="genre-seo">
+      <h2>${escText(c.h2)}</h2>
+      <p>${escText(c.lead)}</p>
+      ${points}
+      <p class="genre-seo-cta">${escText(c.cta)}</p>
+    </div>`;
+}
+
 let GENRE_PAGES = []; // { slug, url, section, count }
 function buildGenrePages(shows) {
   const bySlug = {};
@@ -753,6 +792,7 @@ function buildGenrePages(shows) {
   <div class="wrap">
     <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <span class="current">${escText(section)}</span></nav>
     <h1 class="hub-title">${escText(h1)}</h1>
+    ${genreSeoBlock(slug)}
     <p class="show-lead">${escText(aiLede)}</p>
     <div class="results-head"><span class="results-count">Найдено: ${list.length}</span></div>
     <div class="grid" id="results">\n${cards}\n</div>
@@ -2299,6 +2339,11 @@ span.btn-soldout{cursor:default}
 .hub .breadcrumb{padding-block:18px 2px}
 .hub-title{font-size:clamp(26px,4vw,38px);font-weight:800;margin:8px 0 10px;line-height:1.2}
 .hub-intro{color:var(--muted);font-size:17px;max-width:760px;margin:0 0 22px;line-height:1.7}
+.genre-seo{max-width:760px;margin:0 0 22px;line-height:1.7}
+.genre-seo h2{font-size:clamp(20px,3vw,24px);font-weight:800;color:var(--ink);margin:0 0 12px}
+.genre-seo p{color:var(--muted);font-size:16px;margin:0 0 10px}
+.genre-seo strong{color:var(--ink);font-weight:700}
+.genre-seo p.genre-seo-cta{color:#2563eb;font-weight:700}
 .hub .results-head{margin-bottom:18px}
 .hub-empty{background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
   padding:28px;box-shadow:var(--shadow-sm);text-align:center;color:var(--muted)}
