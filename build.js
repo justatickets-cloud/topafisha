@@ -742,20 +742,28 @@ const GENRE_SEO = {
     ],
     cta: `Билеты в лучшие ряды заканчиваются быстро. Листайте вниз, выберите спектакль и займите место.`,
   },
+  'concerts': {
+    h2: `Живые концерты и горячие события: сцена Израиля открыта для вас`,
+    lead: `Ничто не заменит энергию живого зала и тот момент, когда гаснет свет. Мы собрали для вас лучшие концерты в Израиле, от больших шоу в залах до самых камерных живых площадок.`,
+    points: [
+      [`Найдите концерт по дате:`, `Концерты на сегодня, завтра, выходные, ближайший месяц или на весь 2026 и 2027 год, по жанру, городу или залу.`],
+      [`Без лишних усилий:`, `Выберите артиста, отфильтруйте по городу или залу, и электронный билет придёт на почту за секунду.`],
+    ],
+  },
 };
 // Пока включаем только те жанры, что уже утверждены.
-const GENRE_SEO_ENABLED = new Set(['standup', 'ballet-dance']);
+const GENRE_SEO_ENABLED = new Set(['standup', 'ballet-dance', 'concerts']);
 function genreSeoBlock(slug) {
   if (!GENRE_SEO_ENABLED.has(slug)) return '';
   const c = GENRE_SEO[slug];
   if (!c) return '';
   const points = (c.points || []).map(p =>
     `<p><strong>${escText(p[0])}</strong> ${escText(p[1])}</p>`).join('\n      ');
+  const cta = c.cta ? `\n      <p class="genre-seo-cta">${escText(c.cta)}</p>` : '';
   return `<div class="genre-seo">
       <h2>${escText(c.h2)}</h2>
       <p>${escText(c.lead)}</p>
-      ${points}
-      <p class="genre-seo-cta">${escText(c.cta)}</p>
+      ${points}${cta}
     </div>`;
 }
 
