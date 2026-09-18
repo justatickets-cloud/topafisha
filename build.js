@@ -1437,9 +1437,31 @@ ${faq.map(f => `<details class="faq-item"><summary>${escText(f.q)}</summary><div
   };
 }
 
+// Целевая страница для конверсий: спектакли на Хануку 2026 (по официальному тегу folder="hanukkah")
+function hanukkah2026Article(shows) {
+  const picks = shows.filter(s => (s.filters || []).some(f => f && f.folder === 'hanukkah'))
+    .sort((a, b) => String(a.dateFrom || '').localeCompare(String(b.dateFrom || '')));
+  if (!picks.length) return null;
+  const grid = `<div class="grid">\n${picks.map(showCard).join('\n').replace(/Подробнее и билеты/g, 'Заказать билеты')}\n</div>`;
+  const bodyHtml = `<p class="mag-lead">Ханука приближается, а с ней и ежегодный вызов, знакомый каждому родителю: как подарить детям незабываемые качественные впечатления и не потратить часы на поиски? Мы сделали за вас всю тяжёлую работу. Отобрали, выбрали и собрали в одном месте самые масштабные постановки, мюзиклы и лучшие детские спектакли Хануки 2026.</p>
+<p>Вместо того чтобы прыгать между десятками запутанных сайтов, здесь вы найдёте все шоу, разложенные ясно, по датам, городам и залам по всей стране. С безопасной покупкой, без сбоев и электронными билетами, которые приходят прямо вам на телефон, организовать семейный выход ещё никогда не было так просто.</p>
+<p><strong>Обратите внимание:</strong> по опыту многих лет, лучшие места в центральных залах и в самые удобные часы (утренние и дневные спектакли) разбирают уже в ноябре. Не ждите последнего момента, когда останутся только места с краю зала.</p>
+<p>Листайте вниз, выберите идеальный спектакль для ваших детей, забронируйте лучшие места прямо сейчас и обеспечьте себе Хануку, полную волшебства, спокойствия и настоящего семейного времени.</p>
+${grid}`;
+  return {
+    slug: 'спектакли-ханука-2026',
+    title: 'Спектакли на Хануку 2026: полный гид по лучшим детским шоу Израиля',
+    description: 'Полный гид по спектаклям и представлениям на Хануку 2026 для детей в Израиле: большие постановки, мюзиклы и детские спектакли по датам, городам и залам, с безопасной покупкой билетов.',
+    date: ymdStr(israelToday()),
+    author: BRAND.nameHe,
+    image: (picks.find(s => s.image) || {}).image || '',
+    bodyHtml,
+  };
+}
+
 function buildMagazine(shows) {
   const mdArticles = loadMdArticles();
-  const generated = [weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows), faqArticle()].filter(Boolean);
+  const generated = [hanukkah2026Article(shows), weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows), faqArticle()].filter(Boolean);
   const genSlugs = new Set(generated.map(a => a.slug));
   let articles = [...generated, ...mdArticles.filter(a => !genSlugs.has(a.slug))];
   articles.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
