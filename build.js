@@ -1459,9 +1459,31 @@ ${grid}`;
   };
 }
 
+// Целевая страница для конверсий: спектакли на Суккот 2026 (по тегу folder="sukkot")
+function sukkot2026Article(shows) {
+  const picks = shows.filter(s => (s.filters || []).some(f => f && f.folder === 'sukkot'))
+    .sort((a, b) => String(a.dateFrom || '').localeCompare(String(b.dateFrom || '')));
+  if (!picks.length) return null;
+  const grid = `<div class="grid">\n${picks.map(showCard).join('\n').replace(/Подробнее и билеты/g, 'Заказать билеты')}\n</div>`;
+  const bodyHtml = `<p class="mag-lead">Праздник Суккот приближается, а с ним длинные каникулы холь ха-моэд и вызов, знакомый каждому родителю: как наполнить дни качественными и незабываемыми впечатлениями для детей и не потратить часы на поиски? Мы сделали за вас всю тяжёлую работу. Отобрали, выбрали и собрали в одном месте самые масштабные постановки, мюзиклы и лучшие детские спектакли Суккота 2026.</p>
+<p>Вместо того чтобы прыгать между десятками запутанных сайтов, здесь вы найдёте все шоу, разложенные ясно, по датам, городам и залам по всей стране. С безопасной покупкой, без сбоев и электронными билетами, которые приходят прямо вам на телефон, организовать семейный выход в праздник ещё никогда не было так просто.</p>
+<p><strong>Обратите внимание:</strong> холь ха-моэд Суккот это пик сезона, и лучшие места в центральных залах и в самые удобные часы (утренние и дневные спектакли) разбирают первыми. Не ждите последнего момента, когда останутся только места с краю зала.</p>
+<p>Листайте вниз, выберите идеальный спектакль для ваших детей, забронируйте лучшие места прямо сейчас и обеспечьте себе Суккот, полный волшебства, спокойствия и настоящего семейного времени.</p>
+${grid}`;
+  return {
+    slug: 'спектакли-суккот-2026',
+    title: 'Спектакли на Суккот 2026: полный гид по лучшим детским шоу Израиля',
+    description: 'Полный гид по спектаклям и представлениям на Суккот 2026 для детей в Израиле: большие постановки, мюзиклы и детские спектакли на холь ха-моэд по датам, городам и залам, с безопасной покупкой билетов.',
+    date: ymdStr(israelToday()),
+    author: BRAND.nameHe,
+    image: (picks.find(s => s.image) || {}).image || '',
+    bodyHtml,
+  };
+}
+
 function buildMagazine(shows) {
   const mdArticles = loadMdArticles();
-  const generated = [hanukkah2026Article(shows), weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows), faqArticle()].filter(Boolean);
+  const generated = [hanukkah2026Article(shows), sukkot2026Article(shows), weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows), faqArticle()].filter(Boolean);
   const genSlugs = new Set(generated.map(a => a.slug));
   let articles = [...generated, ...mdArticles.filter(a => !genSlugs.has(a.slug))];
   articles.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
