@@ -1303,13 +1303,44 @@ function magArticlePage(a) {
 }
 
 // Вечнозелёный лонгрид: фестивали и главные события 2027 (First-mover SEO)
-function festivals2027Article() {
+function festivals2027Article(shows) {
   const linkV = (kw, label) => {
     const v = VENUE_REGISTRY.find(x => x.hall.includes(kw) && x.shows.length > 0);
     return v ? `<a href="${esc(v.url)}">${escText(label)}</a>` : `<strong>${escText(label)}</strong>`;
   };
-  const image = (VENUE_REGISTRY.flatMap(v => v.shows).find(s => s.image) || {}).image || '';
+  // CRO: мероприятия 2027 с прямой кнопкой покупки в кассу (без захода на страницу мероприятия)
+  const is2027 = s => String(s.date).slice(0, 4) === '2027';
+  const first2027 = sh => (sh.Seances || []).filter(is2027).map(s => s.date).sort()[0] || '';
+  const s2027 = (shows || []).filter(sh => (sh.Seances || []).some(is2027))
+    .sort((a, b) => first2027(a).localeCompare(first2027(b)));
+  const buyCard = (show) => {
+    const ses = (show.Seances || []).filter(is2027);
+    const se = ses.filter(s => s.link).sort((a, b) => String(a.date).localeCompare(b.date))[0] || ses[0] || {};
+    const buyUrl = se.link ? affiliateUrl(se.link) : show._url;
+    const cities = [...new Set(ses.map(s => s.city).filter(Boolean))];
+    const cityText = cities.slice(0, 2).join(' · ') + (cities.length > 2 ? ' и др.' : '');
+    return `<article class="card">
+    <a class="card-media" href="${esc(buyUrl)}" target="_blank" rel="noopener sponsored" aria-label="${esc(show.name)}">
+      <img loading="lazy" src="${esc(show.image)}" alt="${esc(show.name)}">
+      <span class="card-badge">${escText(show.section)}</span>
+    </a>
+    <div class="card-body">
+      <h3 class="card-title"><a href="${esc(buyUrl)}" target="_blank" rel="noopener sponsored">${escText(show.name)}</a></h3>
+      <p class="card-meta"><span class="ico-cal">${formatDate(se.date)}</span>${cityText ? `<span class="ico-pin">${escText(cityText)}</span>` : ''}</p>
+      <div class="card-foot">
+        <span class="card-price">${priceLabel(show.priceMin, show.priceMax)}</span>
+        <a class="btn btn-primary" href="${esc(buyUrl)}" target="_blank" rel="noopener sponsored">Заказать сейчас</a>
+      </div>
+    </div>
+  </article>`;
+  };
+  const grid2027 = s2027.length
+    ? `<h2>Все мероприятия 2027 года, заказ прямо сейчас</h2>\n<p>${s2027.length} мероприятий уже открыты для заказа. Выберите событие и нажмите «Заказать сейчас», чтобы сразу перейти к безопасной покупке.</p>\n<div class="grid">\n${s2027.map(buyCard).join('\n')}\n</div>`
+    : '';
+  const image = (s2027.find(s => s.image) || VENUE_REGISTRY.flatMap(v => v.shows).find(s => s.image) || {}).image || '';
   const bodyHtml = `<p>2027 год уже сейчас обещает стать одним из самых насыщенных и увлекательных культурных сезонов, которые видел Израиль. Крупные международные артисты отмечают возвращение на местные сцены, гигантские открытые фестивали продолжают набирать обороты, а спрос на билеты на самые ожидаемые мероприятия будет высоким как никогда. Кто знаком с миром живых выступлений, знает: ранняя подготовка — это разница между местом в первом ряду и надписью «билеты распроданы». Мы подготовили для вас подробный гид по всему, что ожидается в 2027 году, по сезонам и жанрам, вместе с выигрышными советами по умной и заблаговременной покупке билетов.</p>
+
+${grid2027}
 
 <h2>Весенние и пасхальные фестивали 2027</h2>
 <p>Весенний сезон открывает год особой энергией. Пасхальные каникулы приносят множество открытых мероприятий для всей семьи, музыкальных фестивалей на природе и представлений на объектах наследия по всей стране. Это время, когда открытые амфитеатры и исторические места превращаются в волшебные сцены, а приятная погода позволяет проводить вечера под открытым небом. Весенние фестивали раскупаются особенно быстро, ведь они объединяют отдых, природу и культуру в одном месте.</p>
@@ -1483,7 +1514,7 @@ ${grid}`;
 
 function buildMagazine(shows) {
   const mdArticles = loadMdArticles();
-  const generated = [hanukkah2026Article(shows), sukkot2026Article(shows), weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(), mustSee2027Article(shows), faqArticle()].filter(Boolean);
+  const generated = [hanukkah2026Article(shows), sukkot2026Article(shows), weekendArticle(shows), familyWeekendArticle(shows), venuesSeatingGuide(), festivals2027Article(shows),mustSee2027Article(shows), faqArticle()].filter(Boolean);
   const genSlugs = new Set(generated.map(a => a.slug));
   let articles = [...generated, ...mdArticles.filter(a => !genSlugs.has(a.slug))];
   articles.sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
