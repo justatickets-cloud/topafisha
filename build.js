@@ -218,6 +218,16 @@ function loadShows() {
 }
 
 /* ------------------------------ Шаблон страницы ------------------------------ */
+// גרסת נכס לפי תוכן: הדפדפן שומר את /assets ל-4 שעות, והפרמטר משתנה בכל שינוי תוכן
+const ASSET_VERSIONS = {};
+function assetUrl(name) {
+  if (!ASSET_VERSIONS[name]) {
+    const src = { 'styles.css': STYLES, 'app.js': APP_JS, 'accessibility.js': A11Y_JS }[name];
+    ASSET_VERSIONS[name] = require('crypto').createHash('md5').update(src).digest('hex').slice(0, 8);
+  }
+  return `/assets/${name}?v=${ASSET_VERSIONS[name]}`;
+}
+
 function page({ title, description, canonical, head = '', body }) {
   return `<!doctype html>
 <html lang="ru" dir="ltr">
@@ -250,7 +260,7 @@ ${/og:image/.test(head) ? '' : `<meta property="og:image" content="${BRAND.domai
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800&display=swap">
-<link rel="stylesheet" href="/assets/styles.css">
+<link rel="stylesheet" href="${assetUrl('styles.css')}">
 <script>try{var _s=JSON.parse(localStorage.getItem('topafisha-a11y')||'{}'),_r=document.documentElement;if(_s.font)_r.style.zoom=(1+Math.max(-2,Math.min(6,_s.font))*0.1).toFixed(2);if(_s.contrast==='high')_r.classList.add('a11y-contrast-high');if(_s.contrast==='inverted')_r.classList.add('a11y-invert');if(_s.underline)_r.classList.add('a11y-underline');if(_s.readable)_r.classList.add('a11y-readable');}catch(e){}</script>
 ${head}
 </head>
@@ -265,7 +275,7 @@ ${siteHeader()}
 ${body}
 ${siteFooter()}
 ${a11yWidget()}
-<script src="/assets/accessibility.js" defer></script>
+<script src="${assetUrl('accessibility.js')}" defer></script>
 </body>
 </html>`;
 }
@@ -1987,7 +1997,7 @@ function buildIndex(shows) {
   </div>
 </main>
 
-<script src="/assets/app.js" defer></script>`;
+<script src="${assetUrl('app.js')}" defer></script>`;
 
   const siteSchema = {
     '@context': 'https://schema.org',
