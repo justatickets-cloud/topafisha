@@ -1929,7 +1929,8 @@ function buildIndex(shows) {
 </section>
 
 <main class="wrap main">
-  <div class="filters">
+  <button type="button" id="filters-toggle" class="filters-toggle" aria-expanded="false" aria-controls="filters-panel"><span>Фильтры: жанр, город, дата</span><span id="filters-count" class="filters-count" aria-label="Активных фильтров" hidden></span></button>
+  <div class="filters" id="filters-panel">
     <div class="filter-row">
       <span class="filter-label">Категории</span>
       <div class="chips">
@@ -1969,6 +1970,7 @@ function buildIndex(shows) {
         </select>
       </div>
     </div>
+    <button type="button" id="filters-done" class="btn btn-primary filters-done">Показать результаты</button>
   </div>
 
   <div class="results-head">
@@ -2369,6 +2371,20 @@ img{max-width:100%;display:block}
 .chip.is-active{background:var(--plum);border-color:var(--plum);color:#fff}
 .venue-chips .chip{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+.filters-toggle,.filters-done{display:none}
+@media(max-width:767px){
+  .filters-toggle{display:flex;align-items:center;gap:10px;width:100%;padding:13px 16px;margin-bottom:16px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer;box-shadow:var(--shadow-sm)}
+  .filters-toggle>span:first-child{flex:1;text-align:start}
+  .filters-toggle::after{content:'';width:8px;height:8px;border-right:2px solid var(--plum);border-bottom:2px solid var(--plum);transform:rotate(45deg);margin-top:-4px;transition:transform .2s}
+  .filters-toggle[aria-expanded="true"]::after{transform:rotate(-135deg);margin-top:4px}
+  .filters-toggle:focus-visible{outline:2px solid var(--plum);outline-offset:2px}
+  .filters-count{background:var(--plum);color:#fff;border-radius:999px;min-width:22px;height:22px;padding:0 7px;font-size:13px;display:inline-flex;align-items:center;justify-content:center}
+  .filters-count[hidden]{display:none}
+  #filters-panel{display:none}
+  #filters-panel.is-open{display:flex}
+  .filters-done{display:block;width:100%}
+  .results-head{scroll-margin-top:76px}
+}
 .results-head{display:flex;align-items:baseline;justify-content:space-between;margin-bottom:18px;gap:12px;flex-wrap:wrap}
 .section-title{font-size:24px;margin:0;font-weight:800}
 .results-count{color:var(--muted);font-weight:600}
@@ -2861,6 +2877,34 @@ const APP_JS = `(function(){
   applyHash();
 
   apply();
+})();
+(function(){
+  var btn=document.getElementById('filters-toggle'),panel=document.getElementById('filters-panel');
+  if(!btn||!panel) return;
+  var badge=document.getElementById('filters-count'),done=document.getElementById('filters-done'),countEl=document.getElementById('count');
+  function activeCount(){
+    var n=0;
+    [].forEach.call(panel.querySelectorAll('.chip.is-active'),function(c){var v=c.getAttribute('data-value');if(v&&v!=='all')n++;});
+    [].forEach.call(panel.querySelectorAll('select'),function(el){if(el.value)n++;});
+    return n;
+  }
+  function sync(){
+    var n=activeCount();
+    badge.textContent=n?String(n):'';
+    badge.hidden=!n;
+    if(done&&countEl) done.textContent='Показать результаты: '+countEl.textContent.replace(/[^0-9]/g,'');
+  }
+  function setOpen(open){panel.classList.toggle('is-open',open);btn.setAttribute('aria-expanded',open?'true':'false');}
+  btn.addEventListener('click',function(){setOpen(!panel.classList.contains('is-open'));sync();});
+  if(done) done.addEventListener('click',function(){
+    setOpen(false);
+    var head=document.querySelector('.results-head');
+    if(head) head.scrollIntoView({block:'start'});
+    btn.focus({preventScroll:true});
+  });
+  panel.addEventListener('click',function(){setTimeout(sync,0);});
+  panel.addEventListener('change',function(){setTimeout(sync,0);});
+  sync();
 })();`;
 
 const A11Y_JS = `(function(){
