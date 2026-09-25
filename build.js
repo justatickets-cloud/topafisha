@@ -240,7 +240,13 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <meta property="og:url" content="${esc(canonical)}">
 <meta property="og:site_name" content="${esc(BRAND.nameHe)}">
 <meta name="theme-color" content="#6d1f4b">
-<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${BRAND.adsenseClient}" crossorigin="anonymous"></script>
+<link rel="icon" href="/assets/favicon.svg" type="image/svg+xml">
+<link rel="icon" href="/assets/favicon-48.png" sizes="48x48" type="image/png">
+<link rel="apple-touch-icon" href="/assets/apple-touch-icon.png">
+${/og:image/.test(head) ? '' : `<meta property="og:image" content="${BRAND.domain}/assets/og-default.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+`}<script async src="https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=${BRAND.adsenseClient}" crossorigin="anonymous"></script>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Rubik:wght@300;400;500;600;700;800&display=swap">
