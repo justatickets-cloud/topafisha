@@ -1,0 +1,44 @@
+name: Nightly Rebuild
+
+# עמודי "היום" / "סוף השבוע" מחושבים בזמן הבנייה, והאתר נבנה רק כשיש push.
+# ביום שבו הפיד לא משתנה אין push, ולכן העמודים האלה היו מציגים את אתמול.
+# כאן נכתב תאריך ישראל לקובץ .build-date פעם ביום, וה-push מפעיל בנייה ב-Cloudflare Pages.
+on:
+  schedule:
+    # כמה ניסיונות אחרי חצות שעון ישראל (קיץ UTC+3 / חורף UTC+2), כי cron של GitHub מתעכב לפעמים בשעות.
+    # רק הריצה הראשונה בכל תאריך מבצעת commit; השאר מדלגות.
+    - cron: '10 21,22,23,0,1 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: nightly-rebuild
+  cancel-in-progress: false
+
+jobs:
+  stamp-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: 📅 Stamp Israel date & push (once per day)
+        run: |
+          TODAY=$(TZ=Asia/Jerusalem date +%F)
+          if [ "$(cat .build-date 2>/dev/null)" = "$TODAY" ]; then
+            echo "Already rebuilt for $TODAY. Skipping."
+            exit 0
+          fi
+          echo "$TODAY" > .build-date
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          git add .build-date
+          git commit -m "chore: nightly rebuild $TODAY"
+          for i in 1 2 3; do
+            git pull --rebase origin main && git push origin main && exit 0
+            sleep 10
+          done
+          exit 1
