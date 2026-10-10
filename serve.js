@@ -10,7 +10,7 @@ http.createServer((req,res)=>{
   if(!fp.startsWith(ROOT)){res.writeHead(403);return res.end('403');}
   if(fs.existsSync(fp) && fs.statSync(fp).isDirectory()) fp=path.join(fp,'index.html');
   fs.readFile(fp,(err,buf)=>{
-    if(err){res.writeHead(404,{'Content-Type':'text/html; charset=utf-8'});return res.end('404: '+p);}
+    if(err){const nf=path.join(ROOT,'404.html');res.writeHead(404,{'Content-Type':'text/html; charset=utf-8'});return res.end(fs.existsSync(nf)?fs.readFileSync(nf):'404: '+p);} // כמו Cloudflare Pages
     res.writeHead(200,{'Content-Type':TYPES[path.extname(fp)]||'application/octet-stream'});
     res.end(buf);
   });

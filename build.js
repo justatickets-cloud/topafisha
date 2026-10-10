@@ -2037,6 +2037,63 @@ function buildIndex(shows) {
   });
 
   fs.writeFileSync(path.join(BRAND.outDir, 'index.html'), html, 'utf8');
+  build404(body);
+}
+
+// עמוד 404: אותו חיפוש וסינון של דף הבית + "מופעים דומים" לפי הכתובת הישנה (קטגוריה + מילים מהסלאג).
+// Cloudflare Pages מגיש dist/404.html עם סטטוס 404 לכל כתובת שלא קיימת (בלעדיו: דף הבית עם 200, soft 404).
+function build404(indexBody) {
+  const T = {
+    "eyebrow": "ТОП Афиша · страница не найдена",
+    "h1": "Мероприятие, которое вы искали, уже прошло или страница удалена",
+    "sub": "Но впереди ещё много интересного. Найдите артиста, событие или город, или выберите из похожих мероприятий ниже.",
+    "related": "Похожие мероприятия",
+    "title": "Страница не найдена",
+    "desc": "Страница не найдена. Ищите концерты, спектакли и мероприятия по всему Израилю."
+  };
+  const slugToSection = Object.fromEntries(Object.entries(CATEGORY_SLUGS).map(([sec, slug]) => [slug, sec]));
+  const stop = ["билеты","расписание"];
+  let body = indexBody.replace(/<p class="hero-eyebrow">[\s\S]*?(?=<div class="search-box">)/,
+    `<p class="hero-eyebrow">${escText(T.eyebrow)}</p>
+    <h1 class="hero-title">${escText(T.h1)}</h1>
+    <p class="hero-sub">${escText(T.sub)}</p>
+    `);
+  body = body.replace('<main class="wrap main">', `<main class="wrap main">
+  <section id="related" class="related" hidden>
+    <h2 class="section-title">${escText(T.related)}</h2>
+    <div id="related-grid" class="grid"></div>
+  </section>`);
+  // רץ לפני app.js (defer): ממלא "מופעים דומים" וקובע #section כך ש-applyHash יסנן לאותה קטגוריה
+  const script = `<script>(function(){
+  var MAP=${JSON.stringify(slugToSection)}, STOP=${JSON.stringify(stop)};
+  var parts=location.pathname.split('/').filter(Boolean).map(function(p){try{return decodeURIComponent(p)}catch(e){return p}});
+  var section=MAP[parts[0]]||'';
+  var words=(parts[1]||parts[0]||'').toLowerCase().split('-').filter(function(w){return w.length>2&&STOP.indexOf(w)<0});
+  var cards=[].slice.call(document.querySelectorAll('#grid .card')).filter(function(c){return !c.classList.contains('is-soldout')});
+  var scored=cards.map(function(c,i){
+    var n=(c.getAttribute('data-name')||'').toLowerCase(), sc=0;
+    words.forEach(function(w){if(n.indexOf(w)>-1)sc+=2;});
+    if(section&&c.getAttribute('data-section')===section)sc+=1;
+    return {c:c,s:sc,i:i};
+  }).filter(function(x){return x.s>0;});
+  scored.sort(function(a,b){return b.s-a.s||a.i-b.i;});
+  var pick=scored.slice(0,6).map(function(x){return x.c;});
+  if(!pick.length) pick=cards.slice(0,6);
+  var rg=document.getElementById('related-grid');
+  pick.forEach(function(c){rg.appendChild(c.cloneNode(true));});
+  if(pick.length) document.getElementById('related').hidden=false;
+  if(section&&!location.hash) history.replaceState(null,'',location.pathname+'#section='+encodeURIComponent(section));
+})();</script>`;
+  const appTag = `<script src="${assetUrl('app.js')}" defer></script>`;
+  body = body.replace(appTag, script + '\n' + appTag);
+  const html = page({
+    title: `${T.title} | ${BRAND.nameHe}`,
+    description: T.desc,
+    canonical: BRAND.domain + '/',
+    head: '<meta name="robots" content="noindex, follow">',
+    body,
+  });
+  fs.writeFileSync(path.join(BRAND.outDir, '404.html'), html, 'utf8');
 }
 
 /* ----------------------------- Страница мероприятия ---------------------------- */
@@ -2381,6 +2438,8 @@ img{max-width:100%;display:block}
 .chip.is-active{background:var(--plum);border-color:var(--plum);color:#fff}
 .venue-chips .chip{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+.related{margin-bottom:34px;padding-bottom:30px;border-bottom:1px solid var(--line)}
+.related .section-title{margin-bottom:16px}
 .filters-toggle,.filters-done{display:none}
 @media(max-width:767px){
   .filters-toggle{display:flex;align-items:center;gap:10px;width:100%;padding:13px 16px;margin-bottom:16px;border:1px solid var(--line);border-radius:14px;background:var(--card);color:var(--ink);font:inherit;font-weight:700;font-size:15px;cursor:pointer;box-shadow:var(--shadow-sm)}
