@@ -1896,6 +1896,30 @@ function buildLandingPages(shows) {
 }
 
 /* ------------------------------ Главная страница -------------------------------- */
+// העשרות תוכן מאושרות (content-agent/page-content.js): id -> {paragraph, faq}. רק עובדות מהפיד ומנהלי הקופה.
+let ENRICHMENTS = {};
+function loadEnrichments() {
+  try { ENRICHMENTS = JSON.parse(fs.readFileSync(path.join(__dirname, 'content', 'enrichments', 'topafisha.json'), 'utf8')); }
+  catch (e) { ENRICHMENTS = {}; }
+}
+function enrichmentSection(show) {
+  const e = ENRICHMENTS[String(show.id)];
+  if (!e || !e.paragraph) return '';
+  const faq = (e.faq || []).filter(f => f && f.q && f.a);
+  const faqHtml = faq.map(f => `<details class="faq-item"><summary>${escText(f.q)}</summary><div class="faq-answer">${escText(f.a)}</div></details>`).join('\n');
+  const faqSchema = faq.length ? {
+    '@context': 'https://schema.org', '@type': 'FAQPage',
+    mainEntity: faq.map(f => ({ '@type': 'Question', name: f.q, acceptedAnswer: { '@type': 'Answer', text: f.a } })),
+  } : null;
+  return `
+  <section class="wrap show-enrichment">
+    <h2>Подробнее о мероприятии</h2>
+    <p class="show-enrichment-lead">${escText(e.paragraph)}</p>
+    ${faqHtml}
+    ${faqSchema ? `<script type="application/ld+json">${JSON.stringify(faqSchema)}</script>` : ''}
+  </section>`;
+}
+
 function buildIndex(shows) {
   const sections = [...new Set(shows.map(s => s.section).filter(Boolean))];
   const cities = [...new Set(shows.flatMap(s => (s.Seances || []).map(z => z.city)).filter(Boolean))];
@@ -2202,8 +2226,19 @@ function buildShow(show) {
   const leadCity = se0.city ? escText(se0.city) : (cities[0] ? escText(cities[0]) : '');
   const leadPrice = Number(show.priceMin) ? `${Number(show.priceMin)}` : '';
   const aiLede = sold
-    ? `${escText(show.name)}${leadVenue ? ` — площадка ${leadVenue}` : ''}${leadCity ? `, ${leadCity}` : ''}. Билеты на данный момент распроданы.`
+    ? `${escText(show.name)}${leadVenue ? `, площадка ${leadVenue}` : ''}${leadCity ? `, ${leadCity}` : ''}. Билеты на данный момент распроданы.`
     : `${escText(show.name)} состоится${leadDate ? ` ${leadDate}` : ''}${leadTime ? ` в ${leadTime}` : ''}${leadVenue ? ` в ${leadVenue}` : ''}${leadCity ? `, ${leadCity}` : ''}. Билеты можно заказать на сайте${leadPrice ? ` по цене от ${leadPrice} шекелей` : ''}.`;
+
+
+  // סיכום לוח ההופעות (מחושב מהפיד, תמיד עדכני): מספר הופעות, ערים וטווח תאריכים
+  const sesSorted = (show.Seances || []).slice().sort((a, b) => String(a.date).localeCompare(String(b.date)));
+  const sumCities = [...new Set(sesSorted.map(z => z.city).filter(Boolean))];
+  const dm = d => new Intl.DateTimeFormat('ru-RU', { day: 'numeric', month: 'long', timeZone: 'UTC' }).format(new Date(String(d).slice(0, 10) + 'T00:00:00Z'));
+  const n = sesSorted.length, n10 = n % 10, n100 = n % 100;
+  const pokaz = n10 === 1 && n100 !== 11 ? 'показ' : (n10 >= 2 && n10 <= 4 && (n100 < 10 || n100 >= 20)) ? 'показа' : 'показов';
+  const scheduleSummary = (!sold && sesSorted.length > 1)
+    ? ` Всего ${sesSorted.length} ${pokaz}${sumCities.length > 1 ? ` в ${sumCities.length} городах (${sumCities.slice(0, 6).join(', ')}${sumCities.length > 6 ? ' и др.' : ''})` : ''}, с ${dm(sesSorted[0].date)} по ${dm(sesSorted[sesSorted.length - 1].date)}.`
+    : '';
 
   const body = `
 <nav class="breadcrumb wrap">
@@ -2233,7 +2268,7 @@ function buildShow(show) {
 
   <div class="wrap show-grid">
     <section class="show-desc">
-      <p class="show-lead">${aiLede}</p>
+      <p class="show-lead">${aiLede}${escText(scheduleSummary)}</p>
       <h2>О мероприятии</h2>
       <div class="rte">${safeHtml(show.description)}</div>
     </section>
@@ -2249,6 +2284,7 @@ function buildShow(show) {
     </aside>
   </div>
 
+${enrichmentSection(show)}
   <section id="seances" class="wrap seances">
     <h2>Даты и билеты</h2>
     <div class="table-wrap">
@@ -2532,6 +2568,9 @@ span.btn-soldout{cursor:default}
 
 .show-grid{display:grid;grid-template-columns:1fr 320px;gap:34px;padding-block:20px 10px;align-items:start}
 .show-desc h2,.seances h2{font-size:22px;font-weight:800;margin:0 0 14px}
+.show-enrichment{padding-block:8px 8px;max-width:820px}
+.show-enrichment h2{font-size:22px;font-weight:800;margin:0 0 14px}
+.show-enrichment-lead{font-size:17px;line-height:1.8;color:var(--ink);margin:0 0 18px}
 .rte{color:#312a3a;font-size:16.5px;line-height:1.85}
 .rte strong{color:var(--ink)}
 .show-aside{position:sticky;top:88px}
@@ -3056,6 +3095,7 @@ function run() {
   console.log(`· К обработке: ${shows.length} мероприятий`);
   assignShowUrls(shows);
   assignHubs(shows);
+  loadEnrichments();
 
   if (fs.existsSync(BRAND.outDir)) {
     fs.rmSync(BRAND.outDir, { recursive: true, force: true });
