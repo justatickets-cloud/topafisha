@@ -352,6 +352,7 @@ function siteFooter() {
     <a href="/афиша-на-месяц">На месяц</a>
     <a href="/афиша-2026">Афиша 2026</a>
     <a href="/афиша-2027">Афиша 2027</a>
+    ${hanukkahSeason() ? `<a href="${HANUKKAH_HUB}">Ханука 2026</a>` : ''}
   </div>
 
   <div class="footer-bottom wrap">
@@ -2211,6 +2212,28 @@ function eventSchema(show) {
   return `<script type="application/ld+json">${JSON.stringify(payload)}</script>`;
 }
 
+// Внутренние ссылки в сезон Хануки: каждая страница ханукального спектакля ссылается на гид и на другие спектакли
+let HANUKKAH_SHOWS = [];
+const HANUKKAH_HUB = '/magazine/' + encodeURI('спектакли-ханука-2026') + '/';
+const hanukkahSeason = () => ymdStr(israelToday()) <= '2026-12-13';
+const isHanukkahShow = s => (s.filters || []).some(f => f && f.folder === 'hanukkah');
+function hanukkahLinksSection(show) {
+  if (!hanukkahSeason() || !isHanukkahShow(show)) return '';
+  const myCities = new Set((show.Seances || []).map(x => x.city));
+  const others = HANUKKAH_SHOWS.filter(s => s !== show && !showSoldOut(s))
+    .map(s => ({ s, sc: (s.Seances || []).some(x => myCities.has(x.city)) ? 1 : 0 }))
+    .sort((a, b) => b.sc - a.sc || String(a.s.dateFrom || '').localeCompare(String(b.s.dateFrom || '')))
+    .slice(0, 6).map(x => x.s);
+  if (!others.length) return '';
+  return `<section class="wrap related hanukkah-more">
+    <h2 class="section-title">Ещё спектакли на Хануку 2026</h2>
+    <div class="grid">
+${others.map(showCard).join('\n')}
+    </div>
+    <p class="hanukkah-hub-link"><a href="${HANUKKAH_HUB}">Все спектакли на Хануку 2026 в одном гиде ›</a></p>
+  </section>`;
+}
+
 function buildShow(show) {
   const cities = [...new Set((show.Seances || []).map(s => s.city).filter(Boolean))];
   const rows = (show.Seances || []).map(s => seanceRow(show, s)).join('\n');
@@ -2299,6 +2322,7 @@ ${enrichmentSection(show)}
     </div>
     <p class="faq-hint faq-hint-center">Вопросы об отмене или получении билетов? <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Читайте гид по частым вопросам ›</a></p>
   </section>
+${hanukkahLinksSection(show)}
   ${sold ? '' : `<div class="mobile-cta"><a class="mobile-cta-btn" href="#seances">Купить билеты ›</a></div>`}
 </article>`;
 
@@ -2474,6 +2498,8 @@ img{max-width:100%;display:block}
 .chip.is-active{background:var(--plum);border-color:var(--plum);color:#fff}
 .venue-chips .chip{max-width:210px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
+.hanukkah-more{margin-top:34px}
+.hanukkah-hub-link{margin-top:16px;font-weight:700;text-align:center}
 .related{margin-bottom:34px;padding-bottom:30px;border-bottom:1px solid var(--line)}
 .related .section-title{margin-bottom:16px}
 .filters-toggle,.filters-done{display:none}
@@ -3104,6 +3130,7 @@ function run() {
 
   buildAssets();
   buildSearchIndex(shows);
+  HANUKKAH_SHOWS = shows.filter(isHanukkahShow);
   shows.forEach(buildShow);
   buildIndex(shows);
   buildStaticPages();
