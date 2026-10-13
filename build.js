@@ -3145,7 +3145,13 @@ function buildRedirects() {
     lines.push(`/magazine/${m.from}/ ${dest} 301`);
   }
   if (lines.length) {
-    fs.writeFileSync(path.join(BRAND.outDir, '_redirects'), lines.join('\n') + '\n', 'utf8');
+    // Короткие адреса для видео (302, сезонные): topafisha.co.il/ханука
+  for (const k of ["ханука","hanukkah"]) {
+    const dest = '/magazine/' + encodeURI('спектакли-ханука-2026') + '/?utm_source=video&utm_medium=short_link&utm_campaign=hanukkah2026';
+    lines.push(`/${encodeURI(k)} ${dest} 302`);
+    lines.push(`/${encodeURI(k)}/ ${dest} 302`);
+  }
+  fs.writeFileSync(path.join(BRAND.outDir, '_redirects'), lines.join('\n') + '\n', 'utf8');
   }
 }
 
