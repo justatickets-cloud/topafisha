@@ -361,7 +361,8 @@ function siteFooter() {
       <a href="/privacy">Политика конфиденциальности</a> ·
       <a href="/terms">Условия использования</a> ·
       <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Вопросы и помощь</a> ·
-      <a href="/contact">Контакты</a>
+      <a href="/contact">Контакты</a> ·
+      <a href="https://t.me/topafisha_israel" target="_blank" rel="noopener">Наш канал в Telegram</a>
     </div>
     <div class="foot-disclaimer">Покупка билетов | Информация, расписание и билеты регулярно обновляются.</div>
   </div>
