@@ -2234,6 +2234,41 @@ ${others.map(showCard).join('\n')}
   </section>`;
 }
 
+// Внутренние ссылки: похожие мероприятия на каждой странице (категория, зал, город, дата)
+let ALL_LIVE_SHOWS = [];
+function relatedShowsSection(show) {
+  const set = k => new Set((show.Seances || []).map(x => x[k]).filter(Boolean));
+  const cities = set('city'), halls = set('hall');
+  const myDate = String(show.dateFrom || '');
+  const words = String(show.name).toLowerCase().split(/[^\p{L}\p{N}]+/u).filter(w => w.length > 3);
+  const scored = ALL_LIVE_SHOWS.filter(s => s !== show && !showSoldOut(s)).map(s => {
+    let sc = 0;
+    if (s.section === show.section) sc += 3;
+    if ((s.Seances || []).some(x => halls.has(x.hall))) sc += 2;
+    if ((s.Seances || []).some(x => cities.has(x.city))) sc += 2;
+    const n = String(s.name).toLowerCase();
+    if (words.some(w => n.includes(w))) sc += 2;
+    const dd = Math.abs(new Date(s.dateFrom || 0) - new Date(myDate || 0)) / 864e5;
+    if (dd < 30) sc += 1;
+    return { s, sc };
+  }).filter(x => x.sc >= 3).sort((a, b) => b.sc - a.sc || String(a.s.dateFrom || '').localeCompare(String(b.s.dateFrom || '')));
+  // גיוון: עד 2 כרטיסים מאותו אולם ראשי
+  const perHall = {}, picks = [];
+  for (const x of scored) {
+    const h = (((x.s.Seances || [])[0] || {}).hall || '').split(/ [-—–] /)[0].replace(/ ?(Зал|זאל|אולם) .*/u, '').trim();
+    if ((perHall[h] = (perHall[h] || 0) + 1) > 2) continue;
+    picks.push(x.s); if (picks.length === 6) break;
+  }
+  if (!picks.length) return '';
+  return `<section class="wrap related related-shows">
+    <h2 class="section-title">Вам также может понравиться</h2>
+    <div class="grid">
+${picks.map(showCard).join('\n')}
+    </div>
+    <p class="hanukkah-hub-link"><a href="/${encodeURI(categorySlug(show.section))}/">Все мероприятия категории ›</a></p>
+  </section>`;
+}
+
 function buildShow(show) {
   const cities = [...new Set((show.Seances || []).map(s => s.city).filter(Boolean))];
   const rows = (show.Seances || []).map(s => seanceRow(show, s)).join('\n');
@@ -2322,7 +2357,7 @@ ${enrichmentSection(show)}
     </div>
     <p class="faq-hint faq-hint-center">Вопросы об отмене или получении билетов? <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Читайте гид по частым вопросам ›</a></p>
   </section>
-${hanukkahLinksSection(show)}
+${hanukkahLinksSection(show) || relatedShowsSection(show)}
   ${sold ? '' : `<div class="mobile-cta"><a class="mobile-cta-btn" href="#seances">Купить билеты ›</a></div>`}
 </article>`;
 
@@ -3131,6 +3166,7 @@ function run() {
   buildAssets();
   buildSearchIndex(shows);
   HANUKKAH_SHOWS = shows.filter(isHanukkahShow);
+  ALL_LIVE_SHOWS = shows;
   shows.forEach(buildShow);
   buildIndex(shows);
   buildStaticPages();
