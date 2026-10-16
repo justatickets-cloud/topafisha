@@ -27,6 +27,9 @@ jobs:
         env:
           BRAVO_FEED_URL: ${{ secrets.BRAVO_FEED_URL }}
 
+      - name: Archive enriched shows (ended pages stay, no 404)
+        run: node archive-shows.js
+
       - name: Commit & Push Changes
         run: |
           git config --global user.name "github-actions[bot]"
