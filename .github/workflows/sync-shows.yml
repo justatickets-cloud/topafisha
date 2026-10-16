@@ -32,10 +32,10 @@ jobs:
           git config --global user.name "github-actions[bot]"
           git config --global user.email "github-actions[bot]@users.noreply.github.com"
 
-          if git diff --quiet shows.json; then
+          if git diff --quiet shows.json content/archive; then
             echo "No changes found in shows.json. Skipping commit."
           else
-            git add shows.json
+            git add shows.json content/archive
             git commit -m "chore: auto-sync shows feed"
             git push origin main
           fi
