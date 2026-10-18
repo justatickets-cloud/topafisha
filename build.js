@@ -243,7 +243,7 @@ j=d.createElement(s),dl=l!='dataLayer'?'&l='+l:'';j.async=true;j.src=
 <!-- Клики «Купить билеты» (buy_click) -->
 <script async src="https://www.googletagmanager.com/gtag/js?id=G-M38QT7FEQL"></script>
 <script>window.dataLayer=window.dataLayer||[];function gtag(){dataLayer.push(arguments)}gtag('js',new Date());gtag('config','G-M38QT7FEQL',{send_page_view:false});
-document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var u;try{u=new URL(a.href)}catch(x){return}if(u.hostname!=='top.kassa.co.il')return;
+document.addEventListener('click',function(e){var a=e.target.closest&&e.target.closest('a[href]');if(!a)return;var u;try{u=new URL(a.href)}catch(x){return}if(u.hostname!=='top.kassa.co.il'||u.pathname.indexOf('/help')===0)return;
 var card=a.closest('.card,tr,li,article');var h1=document.querySelector('h1');
 var name=(card&&card.getAttribute('data-name'))||(h1&&h1.textContent.trim())||document.title;
 gtag('event','buy_click',{show_name:name.slice(0,100),page_type:location.pathname==='/'?'home':location.pathname.split('/')[1]||'other',link_url:a.href.slice(0,300),transport_type:'beacon'})},true);</script>
