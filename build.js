@@ -3191,20 +3191,46 @@ const A11Y_JS = `(function(){
 
 /* -------------------------------- Запуск --------------------------------- */
 // Файл _redirects для Cloudflare Pages: 301 со старых английских слагов магазина на новые
-function buildRedirects() {
+// מופעים שיצאו מהפיד ואין להם עמוד "הסתיים" (בלי תוכן ייחודי): הפניית 301 לקטגוריה שלהם במקום 404,
+// כדי לא לאבד את החשיפות בגוגל. נשמר שנה מהפעם האחרונה שהמופע נראה בפיד.
+let ENDED_KEPT_IDS = new Set();
+function endedRedirectLines(liveShows, maxLines) {
+  let past = {};
+  try { past = JSON.parse(fs.readFileSync(path.join(__dirname, 'content', 'archive', 'past-shows.json'), 'utf8')); } catch (e) { return []; }
+  const live = new Set(liveShows.map(x => String(x.id)));
+  const liveUrls = new Set(liveShows.map(x => x._url));
+  const today = new Date();
+  const gone = Object.entries(past)
+    .filter(([id, p]) => !live.has(id) && !ENDED_KEPT_IDS.has(id) && p.name && (today - new Date(p.lastSeen)) / 864e5 <= 365)
+    .sort((x, y) => String(y[1].lastSeen).localeCompare(String(x[1].lastSeen)))
+    .map(([id, p]) => ({ id, name: p.name, section: p.section, Seances: [] }));
+  normalizeShows(gone);
+  assignShowUrls(gone);
+  const lines = [];
+  for (const s of gone) {
+    if (liveUrls.has(s._url)) continue;
+    const dest = '/' + encodeURI(categorySlug(s.section)) + '/';
+    const add = [`${encodeURI(s._url)} ${dest} 301`];
+    if (lines.length + add.length > maxLines) break;
+    lines.push(...add);
+  }
+  return lines;
+}
+function buildRedirects(shows) {
   const lines = [];
   for (const m of [...MAGAZINE_REDIRECTS, ...LANDING_REDIRECTS]) {
     const dest = `/magazine/${encodeURI(m.to)}/`;
     lines.push(`/magazine/${m.from} ${dest} 301`);
     lines.push(`/magazine/${m.from}/ ${dest} 301`);
   }
-  if (lines.length) {
+  {
     // Короткие адреса для видео (302, сезонные): topafisha.co.il/ханука
   for (const k of ["ханука","hanukkah"]) {
     const dest = '/magazine/' + encodeURI('спектакли-ханука-2026') + '/?utm_source=video&utm_medium=short_link&utm_campaign=hanukkah2026';
     lines.push(`/${encodeURI(k)} ${dest} 302`);
     lines.push(`/${encodeURI(k)}/ ${dest} 302`);
   }
+  lines.push(...endedRedirectLines(shows, 1950 - lines.length));
   fs.writeFileSync(path.join(BRAND.outDir, '_redirects'), lines.join('\n') + '\n', 'utf8');
   }
 }
@@ -3229,6 +3255,7 @@ function run() {
   ALL_LIVE_SHOWS = shows;
   shows.forEach(buildShow);
   const endedShows = loadEndedShows(shows);
+  ENDED_KEPT_IDS = new Set(endedShows.map(x => String(x.id)));
   buildEndedShows(endedShows);
   console.log(`· עמודי "הסתיים" עם תוכן ייחודי: ${endedShows.length}`);
   buildIndex(shows);
@@ -3242,7 +3269,7 @@ function run() {
   const landingCount = buildLandingPages(shows);
   const magazineCount = buildMagazine(shows);
   const newsCount = buildNews(shows);
-  buildRedirects();
+  buildRedirects(shows);
   buildSitemap([...shows, ...endedShows]); // עמודי "הסתיים" נשארים במפת האתר
   buildAdsTxt();
   buildBingAuth();

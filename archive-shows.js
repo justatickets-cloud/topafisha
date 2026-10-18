@@ -36,6 +36,20 @@ if (process.argv.includes('--seed')) {
   }
 }
 
+// כל מופע שהופיע באתר (גם בלי תוכן ייחודי): כשהוא יוצא מהפיד, הכתובת שלו מקבלת הפניית 301 לקטגוריה במקום 404
+const PFILE = path.join(DIR, 'content', 'archive', 'past-shows.json');
+const past = fs.existsSync(PFILE) ? JSON.parse(fs.readFileSync(PFILE, 'utf8')) : {};
+for (const s of live) past[String(s.id)] = { name: s.name, section: s.section, lastSeen: today };
+if (process.argv.includes('--seed-past')) {
+  const commits = execSync('git log --format=%H -- shows.json', { cwd: DIR }).toString().trim().split('\n');
+  for (const c of commits) {
+    let old; try { old = listOf(JSON.parse(execSync(`git show ${c}:shows.json`, { cwd: DIR, maxBuffer: 1 << 28 }).toString())); } catch (e) { continue; }
+    const date = execSync(`git show -s --format=%cs ${c}`, { cwd: DIR }).toString().trim();
+    for (const s of old) { const id = String(s.id); if (!past[id] || past[id].lastSeen < date) past[id] = { name: s.name, section: s.section, lastSeen: date }; }
+  }
+}
+fs.mkdirSync(path.dirname(PFILE), { recursive: true });
+fs.writeFileSync(PFILE, JSON.stringify(past), 'utf8');
 fs.mkdirSync(path.dirname(AFILE), { recursive: true });
 fs.writeFileSync(AFILE, JSON.stringify(archive), 'utf8');
 const liveIds = new Set(live.map(s => String(s.id)));
