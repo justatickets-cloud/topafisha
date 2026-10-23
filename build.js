@@ -721,6 +721,10 @@ let CITY_INDEXED = new Set(); // slug-и страниц выше порога (�
 const HUB_STICKY = `<div class="mobile-cta"><a class="mobile-cta-btn" href="#results">Все мероприятия и билеты ›</a></div>`;
 
 const noDash = t => String(t || '').split(/\s+[-—–]\s+/)[0].trim();
+const SEC_PROSE = { 'Джаз концерты': 'джаз-концерты', 'Рок концерты': 'рок-концерты', 'Стенд ап': 'стендап', 'Лекции и Мастер-классы': 'лекции и мастер-классы' };
+const lcFirst = t => SEC_PROSE[t] || String(t).charAt(0).toLowerCase() + String(t).slice(1);
+// название события в тексте: в «ёлочках», если их ещё нет
+const ruTitle = t => { const n = noDash(t).replace(/&nbsp;/g, ' '); return /^[«"]/.test(n) ? n : `«${n}»`; };
 const ruPlural = (n, one, few, many) => {
   const m10 = n % 10, m100 = n % 100;
   return m10 === 1 && m100 !== 11 ? one : m10 >= 2 && m10 <= 4 && (m100 < 12 || m100 > 14) ? few : many;
@@ -760,8 +764,8 @@ function cityIntro(cfg, list) {
   parts.push(`Сейчас ${cfg.inForm} в афише ${n} ${ruPlural(n, 'мероприятие', 'мероприятия', 'мероприятий')}` +
     (hallNames.length ? ` в ${hallNames.length} ${ruPlural(hallNames.length, 'зале', 'залах', 'залах')}: ${hallLinks.join(', ')}${hallNames.length > 4 ? ' и других' : ''}.` : '.'));
   const top = Object.entries(secs).sort((a, b) => b[1] - a[1]).slice(0, 3);
-  if (top.length) parts.push(`Больше всего в афише: ${top.map(([sec, k]) => `<a href="/${encodeURI(categorySlug(sec))}/">${escText(sec)}</a> (${k})`).join(', ')}.`);
-  if (list[0]) parts.push(`Ближайшее событие: <a href="${esc(list[0].show._url)}">${escText(noDash(list[0].show.name))}</a>, ${formatDate(list[0].next)}.`);
+  if (top.length) parts.push(`Жанры в афише: ${top.map(([sec, k]) => `<a href="/${encodeURI(categorySlug(sec))}/">${escText(lcFirst(sec))}</a> (${k})`).join(', ')}.`);
+  if (list[0]) parts.push(`Ближайшее событие: <a href="${esc(list[0].show._url)}">${escText(ruTitle(list[0].show.name))}</a>, ${formatDate(list[0].next)}.`);
   return parts.map(p => `<p class="hub-intro">${p}</p>`).join('\n');
 }
 
@@ -805,6 +809,7 @@ function buildCityPages(shows) {
     </div>
     ${list.length ? `<div class="grid" id="results">\n${cards}\n</div>\n${more}` : hubEmpty()}
     ${nearLinks(cfg)}
+    ${(KIDS_CITY_COUNTS[kidsSlug(cfg)] || 0) >= KIDS_MIN_SHOWS ? `<p class="landing-related">Детям ${escText(cfg.inForm)}: <a href="/${kidsSlug(cfg)}/">детские спектакли (${KIDS_CITY_COUNTS[kidsSlug(cfg)]}) ›</a></p>` : ''}
   </div>
 </article>
 ${list.length ? HUB_STICKY : ''}
@@ -833,8 +838,181 @@ function cityMoreSection(show) {
     <div class="grid">
 ${list.slice(0, 5).map(x => showCard(x.show)).join('\n')}
     </div>
-    ${list.length > 5 ? `<p class="hanukkah-hub-link"><a href="/${cfg.slug}/">Вся афиша ${escText(cfg.inForm)} (${list.length}) ›</a></p>` : ''}
+    ${list.length > 5 ? `<p class="hanukkah-hub-link"><a href="/${cfg.slug}/">Все мероприятия ${escText(cfg.inForm)} (${list.length}) ›</a></p>` : ''}
   </section>`;
+}
+
+/* ------------------- Детские страницы (Kids SEO) ------------------- */
+// Детские спектакли по городам, на сегодня/завтра/субботу и для малышей.
+// Всё считается из фида при каждой сборке; возраст не угадываем (в фиде он почти не указан).
+const KIDS_MIN_SHOWS = 5;
+const isKidsShow = s => KIDS_SECTIONS.has(s.section);
+// «для малышей»: только явные слова в названии/описании фида
+const TODDLER_RE = /для самых маленьких|для малышей|малышам|Час рассказа|Час театрального рассказа|ясельн|дошкольн/i;
+const kidsSlug = c => c.slug.replace(/^афиша-/, 'детские-спектакли-');
+let KIDS_INDEXED = new Set();
+let KIDS_CITY_COUNTS = {};
+
+const ilIso = (offsetDays = 0) => {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+  d.setDate(d.getDate() + offsetDays);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+};
+const nextSaturdayIso = () => {
+  const d = new Date(new Date().toLocaleString('en-US', { timeZone: 'Asia/Jerusalem' }));
+  return ilIso((6 - d.getDay() + 7) % 7);
+};
+
+// Список «событие + ближайший подходящий сеанс», по дате
+function kidsList(shows, seanceOk) {
+  return shows.filter(s => isKidsShow(s) && !showSoldOut(s))
+    .map(s => ({ show: s, next: (s.Seances || []).filter(seanceOk).map(x => x.date).sort()[0] }))
+    .filter(x => x.next)
+    .sort((a, b) => a.next.localeCompare(b.next));
+}
+
+function kidsCards(list) {
+  const cards = list.map((x, i) => {
+    const c = showCard(x.show);
+    return i < CITY_FIRST ? c : c.replace('<article class="card', '<article class="card is-more');
+  }).join('\n');
+  const more = list.length > CITY_FIRST
+    ? `<p class="more-wrap"><button type="button" class="btn btn-primary more-btn" id="more-btn">Показать ещё (${list.length - CITY_FIRST})</button></p>` : '';
+  return { html: `<div class="grid" id="results">\n${cards}\n</div>\n${more}`, more };
+}
+
+// Вводный абзац: число спектаклей, залы, утренние и субботние сеансы, Ханука, ближайший
+function kidsIntro(list, lead, seanceOk, forms = ['детский спектакль', 'детских спектакля', 'детских спектаклей'], oneDay = false) {
+  const halls = {};
+  let morning = 0, sat = 0, hk = 0;
+  for (const { show } of list) {
+    if (isHanukkahShow(show)) hk++;
+    for (const x of show.Seances || []) {
+      if (!seanceOk(x)) continue;
+      halls[noDash(x.hall)] = (halls[noDash(x.hall)] || 0) + 1;
+      if (String(x.time) < '13:00') morning++;
+      if (new Date(x.date).getDay() === 6) sat++;
+    }
+  }
+  const n = list.length;
+  const hallNames = Object.keys(halls).sort((a, b) => halls[b] - halls[a]);
+  const parts = [`${lead} в афише ${n} ${ruPlural(n, ...forms)}` +
+    (hallNames.length ? ` в ${hallNames.length} ${ruPlural(hallNames.length, 'зале', 'залах', 'залах')}: ${hallNames.slice(0, 4).map(escText).join(', ')}${hallNames.length > 4 ? ' и других' : ''}.` : '.')];
+  const extra = [];
+  if (morning) extra.push(`${morning} ${ruPlural(morning, 'утренний сеанс', 'утренних сеанса', 'утренних сеансов')} (до 13:00)`);
+  if (sat && !oneDay) extra.push(`${sat} ${ruPlural(sat, 'сеанс', 'сеанса', 'сеансов')} в субботу`);
+  if (extra.length) parts.push(`В расписании ${extra.join(' и ')}.`);
+  if (hk && hanukkahSeason()) parts.push(`${hk} ${ruPlural(hk, 'спектакль идёт', 'спектакля идут', 'спектаклей идут')} на Хануку, подробнее в <a href="${HANUKKAH_HUB}">гиде по спектаклям на Хануку 2026</a>.`);
+  if (list[0]) parts.push(`Ближайший: <a href="${esc(list[0].show._url)}">${escText(ruTitle(list[0].show.name))}</a>, ${formatDate(list[0].next)}.`);
+  return parts.map(p => `<p class="hub-intro">${p}</p>`).join('\n');
+}
+
+function kidsNavLinks(currentSlug) {
+  const links = [
+    ['детские-спектакли-сегодня', 'сегодня'],
+    ['детские-спектакли-завтра', 'завтра'],
+    ['детские-спектакли-в-субботу', 'в субботу'],
+    ['спектакли-для-малышей', 'для малышей'],
+  ].filter(([s]) => s !== currentSlug).map(([s, t]) => `<a href="/${s}/">${t}</a>`);
+  const cities = CITY_PAGES.filter(c => KIDS_INDEXED.has(kidsSlug(c)) && kidsSlug(c) !== currentSlug)
+    .map(c => `<a href="/${kidsSlug(c)}/">${escText(c.name)}</a>`);
+  return `<p class="landing-related">Детские спектакли: ${links.join(' · ')}</p>` +
+    (cities.length ? `\n<p class="landing-related">По городам: ${cities.join(' · ')}</p>` : '');
+}
+
+function writeKidsPage({ slug, title, h1, desc, intro, list, empty, indexed, extraLinks = '' }) {
+  const canonical = `${BRAND.domain}/${slug}/`;
+  const crumb = breadcrumbSchema([
+    { name: 'Главная', url: BRAND.domain + '/' },
+    { name: 'Спектакли для детей', url: `${BRAND.domain}/${encodeURI(categorySlug('Спектакли для детей'))}/` },
+    { name: h1, url: canonical },
+  ]);
+  const { html: grid, more } = list.length ? kidsCards(list) : { html: '', more: '' };
+  const body = `
+<article class="hub">
+  <div class="wrap">
+    <nav class="breadcrumb"><a href="/">Главная</a> <span>›</span> <a href="/${encodeURI(categorySlug('Спектакли для детей'))}/">Спектакли для детей</a> <span>›</span> <span class="current">${escText(h1)}</span></nav>
+    <h1 class="hub-title">${escText(h1)}</h1>
+    ${intro}
+    ${empty || ''}
+    <div class="results-head"><span class="results-count">Найдено: ${list.length}</span></div>
+    ${list.length ? grid : hubEmpty()}
+    ${extraLinks}
+    ${kidsNavLinks(slug)}
+  </div>
+</article>
+${list.length ? HUB_STICKY : ''}
+${more ? MORE_BTN_SCRIPT : ''}`;
+  const head = crumb + (indexed ? '' : '\n<meta name="robots" content="noindex, follow">');
+  const dir = path.join(BRAND.outDir, slug);
+  ensureDir(dir);
+  fs.writeFileSync(path.join(dir, 'index.html'), page({ title, description: desc, canonical, head, body }), 'utf8');
+  if (indexed) KIDS_INDEXED.add(slug);
+}
+
+function buildKidsPages(shows) {
+  KIDS_INDEXED = new Set();
+  KIDS_CITY_COUNTS = {};
+  const t = ilIso();
+  // сначала считаем, какие города проходят порог (для перелинковки между ними)
+  const perCity = CITY_PAGES.map(cfg => ({ cfg, ok: x => x.city === cfg.city && x.date >= t }))
+    .map(o => ({ ...o, list: kidsList(shows, o.ok) }));
+  perCity.forEach(o => { KIDS_CITY_COUNTS[kidsSlug(o.cfg)] = o.list.length; if (o.list.length >= KIDS_MIN_SHOWS) KIDS_INDEXED.add(kidsSlug(o.cfg)); });
+
+  perCity.filter(o => o.list.length).forEach(({ cfg, ok, list }) => {
+    const slug = kidsSlug(cfg);
+    writeKidsPage({
+      slug,
+      title: `Детские спектакли ${cfg.inForm} 2026 | Билеты | ТОП Афиша`,
+      h1: `Детские спектакли и представления ${cfg.inForm}`,
+      desc: `Детские спектакли ${cfg.inForm}: ${list.length} ${ruPlural(list.length, 'спектакль', 'спектакля', 'спектаклей')} с датами, залами и ценами. Билеты онлайн.`,
+      intro: kidsIntro(list, `Сейчас ${cfg.inForm}`, ok),
+      list,
+      indexed: list.length >= KIDS_MIN_SHOWS,
+      extraLinks: `<p class="landing-related"><a href="/${cfg.slug}/">Все концерты, спектакли и мероприятия ${escText(cfg.inForm)} ›</a></p>`,
+    });
+  });
+
+  const upcoming = kidsList(shows, x => x.date >= t);
+  const day = (slug, date, title, h1, label) => {
+    const ok = x => x.date === date;
+    const list = kidsList(shows, ok);
+    const empty = list.length ? '' : `<p class="landing-empty">${label} детских спектаклей в афише нет. Ниже ближайшие.</p>`;
+    writeKidsPage({
+      slug, title, h1,
+      desc: `${h1}: расписание, залы и цены. Билеты онлайн.`,
+      intro: list.length ? kidsIntro(list, label, ok, undefined, true) : '',
+      empty,
+      list: list.length ? list : upcoming.slice(0, 10),
+      indexed: true,
+    });
+    return list.length;
+  };
+  const counts = {
+    today: day('детские-спектакли-сегодня', t, 'Детские спектакли сегодня | ТОП Афиша', 'Детские спектакли сегодня', 'Сегодня'),
+    tomorrow: day('детские-спектакли-завтра', ilIso(1), 'Детские спектакли завтра | ТОП Афиша', 'Детские спектакли завтра', 'Завтра'),
+    saturday: day('детские-спектакли-в-субботу', nextSaturdayIso(), 'Детские спектакли в субботу | ТОП Афиша', 'Детские спектакли в субботу', 'В субботу'),
+  };
+
+  const tOk = x => x.date >= t;
+  const toddlers = kidsList(shows.filter(s => TODDLER_RE.test(`${s.name} ${stripTags(s.description)}`)), tOk);
+  writeKidsPage({
+    slug: 'спектакли-для-малышей',
+    title: 'Спектакли для малышей 2026 | Билеты | ТОП Афиша',
+    h1: 'Спектакли для малышей и часы рассказа',
+    desc: `Спектакли для самых маленьких: ${toddlers.length} ${ruPlural(toddlers.length, 'событие', 'события', 'событий')} с датами, залами и ценами.`,
+    intro: toddlers.length ? kidsIntro(toddlers, 'Сейчас', tOk, ['спектакль для малышей', 'спектакля для малышей', 'спектаклей для малышей']) : '',
+    list: toddlers,
+    indexed: toddlers.length >= KIDS_MIN_SHOWS,
+  });
+  counts.toddlers = toddlers.length;
+  counts.cities = perCity.filter(o => o.list.length >= KIDS_MIN_SHOWS).length;
+  return counts;
+}
+
+// Блок со ссылками для страницы жанра «Спектакли для детей» и для страниц городов
+function kidsHubLinks() {
+  return kidsNavLinks('');
 }
 
 // ===================== Жанровые хабы (Genre Hubs) =====================
@@ -976,6 +1154,7 @@ function buildGenrePages(shows) {
     <p class="show-lead">${escText(aiLede)}</p>
     <div class="results-head"><span class="results-count">Найдено: ${list.length}</span></div>
     <div class="grid" id="results">\n${cards}\n</div>
+    ${slug === 'kids-plays' ? kidsHubLinks() : ''}
   </div>
 </article>
 ${HUB_STICKY}`;
@@ -2548,6 +2727,7 @@ function buildSitemap(shows) {
     { loc: BRAND.domain + '/', pri: '1.0' },
     ...HUB_PAGES.map(p => ({ loc: `${BRAND.domain}/${p.slug}`, pri: '0.9' })),
     ...CITY_PAGES.filter(p => CITY_INDEXED.has(p.slug)).map(p => ({ loc: `${BRAND.domain}/${p.slug}/`, pri: '0.9' })),
+    ...[...KIDS_INDEXED].map(slug => ({ loc: `${BRAND.domain}/${slug}/`, pri: '0.8' })),
     ...GENRE_PAGES.map(p => ({ loc: `${BRAND.domain}${p.url}`, pri: '0.8' })),
     { loc: `${BRAND.domain}/артисты/`, pri: '0.7' },
     ...ARTIST_REGISTRY.map(a => ({ loc: `${BRAND.domain}${a.url}`, pri: '0.7' })),
@@ -3353,7 +3533,9 @@ function run() {
   buildIndex(shows);
   buildStaticPages();
   const hubCounts = buildHubPages(shows);
+  const kidsCounts = buildKidsPages(shows); // до городов: город ссылается на детскую страницу
   const cityCounts = buildCityPages(shows);
+  console.log(`  - Детские страницы: городов ${kidsCounts.cities}, сегодня ${kidsCounts.today}, завтра ${kidsCounts.tomorrow}, суббота ${kidsCounts.saturday}, малыши ${kidsCounts.toddlers}`);
   const genreCount = buildGenrePages(shows);
   const artistCount = buildArtistsIndex(shows);
   const artistPageCount = buildArtistPages();
