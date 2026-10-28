@@ -228,7 +228,38 @@ function assetUrl(name) {
   return `/assets/${name}?v=${ASSET_VERSIONS[name]}`;
 }
 
-function page({ title, description, canonical, head = '', body }) {
+/* ------------------- Ссылки между языками (hreflang) ------------------- */
+// Карта id мероприятия → путь на сайте на иврите. Загружается при сборке из <altSite>/ids.json,
+// резервная копия хранится в content/alt-urls.json на случай отсутствия сети.
+const ALT_CACHE = path.join(__dirname, 'content', 'alt-urls.json');
+let ALT_BY_ID = {};
+function loadAltUrls() {
+  try {
+    const out = require('child_process').execFileSync(process.execPath, ['-e',
+      `fetch(${JSON.stringify(BRAND.altSite + '/ids.json')},{signal:AbortSignal.timeout(15000)}).then(r=>{if(!r.ok)throw new Error(r.status);return r.text()}).then(t=>process.stdout.write(t)).catch(()=>process.exit(1))`],
+      { encoding: 'utf8', timeout: 20000, stdio: ['ignore', 'pipe', 'ignore'] });
+    const j = JSON.parse(out);
+    if (j && typeof j === 'object' && Object.keys(j).length > 50) {
+      ALT_BY_ID = j;
+      fs.writeFileSync(ALT_CACHE, JSON.stringify(j, null, 0) + '\n', 'utf8');
+      return 'live';
+    }
+  } catch (e) {}
+  try { ALT_BY_ID = JSON.parse(fs.readFileSync(ALT_CACHE, 'utf8')); return 'cache'; } catch (e) { return 'none'; }
+}
+function altUrlOf(show) { const p = ALT_BY_ID[String(show.id)]; return p ? BRAND.altSite + p : ''; }
+function writeIdsMap(shows) {
+  const m = {}; for (const s of shows) if (s._url) m[s.id] = s._url;
+  fs.writeFileSync(path.join(BRAND.outDir, 'ids.json'), JSON.stringify(m), 'utf8');
+}
+function hreflangLinks(canonical, alt) {
+  if (!alt) return '';
+  return `<link rel="alternate" hreflang="ru" href="${esc(canonical)}">
+<link rel="alternate" hreflang="he" href="${esc(alt)}">
+`;
+}
+
+function page({ title, description, canonical, head = '', body, alt = '' }) {
   return `<!doctype html>
 <html lang="ru" dir="ltr">
 <head>
@@ -251,7 +282,7 @@ gtag('event','buy_click',{show_name:name.slice(0,100),page_type:location.pathnam
 <title>${esc(title)}</title>
 <meta name="description" content="${esc(description)}">
 <link rel="canonical" href="${esc(canonical)}">
-<meta property="og:type" content="website">
+${hreflangLinks(canonical, alt)}<meta property="og:type" content="website">
 <meta property="og:title" content="${esc(title)}">
 <meta property="og:description" content="${esc(description)}">
 <meta property="og:url" content="${esc(canonical)}">
@@ -277,7 +308,7 @@ ${head}
 height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 <!-- End Google Tag Manager (noscript) -->
 <a class="skip-link" href="#content">Перейти к содержимому</a>
-${siteHeader()}
+${siteHeader(alt)}
 <div id="content" tabindex="-1"></div>
 ${body}
 ${siteFooter()}
@@ -287,7 +318,7 @@ ${a11yWidget()}
 </html>`;
 }
 
-function siteHeader() {
+function siteHeader(alt = '') {
   return `<header class="site-header">
   <div class="wrap header-inner">
     <a class="brand" href="/" aria-label="${esc(BRAND.nameHe)}">
@@ -297,7 +328,7 @@ function siteHeader() {
       <a href="/" class="nav-home">Все мероприятия</a>
       <a href="/артисты/">Артисты</a>
       <a href="/magazine/">Журнал</a>
-      <a href="${esc(BRAND.altSite)}" class="lang-switch" hreflang="he" title="עברית">עברית</a>
+      <a href="${esc(alt || BRAND.altSite + '/')}" class="lang-switch" hreflang="he" lang="he" title="עברית">עברית</a>
     </nav>
   </div>
 </header>`;
@@ -2335,6 +2366,7 @@ function buildIndex(shows) {
     canonical: BRAND.domain + '/',
     head: `<script type="application/ld+json">${JSON.stringify(siteSchema)}</script>`,
     body,
+    alt: BRAND.altSite + '/',
   });
 
   fs.writeFileSync(path.join(BRAND.outDir, 'index.html'), html, 'utf8');
@@ -2689,6 +2721,7 @@ ${cityMoreSection(show)}
     head: eventSchema(show) +
       `\n<meta property="og:image" content="${esc(show.image)}">`,
     body,
+    alt: altUrlOf(show),
   });
 
   const dir = path.join(BRAND.outDir, ...show._dir.split('/'));
@@ -3525,7 +3558,9 @@ function run() {
   buildSearchIndex(shows);
   HANUKKAH_SHOWS = shows.filter(isHanukkahShow);
   ALL_LIVE_SHOWS = shows;
+  console.log(`· Ссылки на сайт на иврите: ${loadAltUrls()} (${Object.keys(ALT_BY_ID).length} мероприятий)`);
   shows.forEach(buildShow);
+  writeIdsMap(shows);
   const endedShows = loadEndedShows(shows);
   ENDED_KEPT_IDS = new Set(endedShows.map(x => String(x.id)));
   buildEndedShows(endedShows);
