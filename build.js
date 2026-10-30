@@ -66,6 +66,30 @@ function stripTags(html) {
     .trim();
 }
 
+// meta description למופע: קודם התוכן הייחודי, אחרת התיאור מהפיד בלי משפטי נהלים (פתיחת דלתות, איחורים, גילאים)
+// שחוזרים בהרבה מופעים ונראים לגוגל כתוכן כפול
+const BOILER_RE = /(не допускают|опоздав|открытие клуба|прибыть|коляск|^внимание!?$|вход с \d+ лет|פתיחת הדלתות|הדלתות (?:והמסעדה )?(?:ייפתחו|יפתחו|נפתחות)|מומלץ להגיע|על מנת (?:לא|שלא) ל|המאחרים|לא תתאפשר|^חשוב לדעת|^שימו לב|יש להגיע)/i;
+let BOILER = new Set();
+const unent = t => String(t || '').replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&');
+const descSentences = t => unent(stripTags(t)).split(/(?<=[^\s.]{2}[.!?])\s+/).map(x => x.trim()).filter(Boolean);
+function computeBoilerplate(shows) {
+  const cnt = {};
+  for (const s of shows) for (const x of new Set(descSentences(s.description))) cnt[x] = (cnt[x] || 0) + 1;
+  BOILER = new Set(Object.keys(cnt).filter(x => cnt[x] >= 3));
+}
+function clipDesc(t, n = 155) {
+  t = String(t || '').replace(/\s+[—–-]+\s+/g, ', ').replace(/[—–]/g, ' ').trim(); // בלי מקפים (חוק ברזל 2)
+  if (t.length <= n) return t;
+  const c = t.slice(0, n - 1);
+  return c.slice(0, Math.max(c.lastIndexOf(' '), 60)).replace(/[,;:\s]+$/, '') + '…';
+}
+function showMetaDesc(show, fallback) {
+  const e = ENRICHMENTS[String(show.id)];
+  if (e && e.paragraph) return clipDesc(unent(stripTags(e.paragraph)));
+  const body = descSentences(show.description).filter(x => !BOILER.has(x) && !BOILER_RE.test(x)).join(' ');
+  return clipDesc(body.length >= 60 ? body : [unent(stripTags(fallback)), body].filter(Boolean).join(' '));
+}
+
 function formatDate(iso) {
   // "2026-12-26" -> "суббота, 26 декабря 2026"
   const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(iso || ''));
@@ -1440,7 +1464,9 @@ function buildVenuePages() {
 ${v.shows.length ? HUB_STICKY : ''}`;
     const html = page({
       title: `${v.hall} — афиша и билеты | ТОП Афиша`,
-      description: `Все ближайшие мероприятия в зале ${v.hall}${v.city ? ', ' + v.city : ''}. Актуальные даты, цены и безопасная покупка билетов.`,
+      description: clipDesc(v.shows.length
+        ? `${v.hall}${v.city ? ', ' + v.city : ''}: ${v.shows.length} ближайш${v.shows.length === 1 ? 'ее мероприятие' : 'их мероприятий'}, в том числе ${v.shows.slice(0, 3).map(s => s.name).join(', ')}. Даты, цены и билеты.`
+        : `Афиша зала ${v.hall}${v.city ? ', ' + v.city : ''}: даты, цены и билеты на ближайшие мероприятия.`),
       canonical,
       head: crumb + `\n<script type="application/ld+json">${JSON.stringify(placeSchema)}</script>`,
       body,
@@ -2681,7 +2707,6 @@ function buildShow(show) {
   const cities = [...new Set((show.Seances || []).map(s => s.city).filter(Boolean))];
   const rows = (show.Seances || []).map(s => seanceRow(show, s)).join('\n');
   const canonical = `${BRAND.domain}${show._url}`;
-  const metaDesc = stripTags(show.description).slice(0, 155);
   const sold = showSoldOut(show);
 
   // Вступительный фактический абзац для AI Overviews (динамически из фида)
@@ -2694,6 +2719,7 @@ function buildShow(show) {
   const aiLede = sold
     ? `${escText(show.name)}${leadVenue ? `, площадка ${leadVenue}` : ''}${leadCity ? `, ${leadCity}` : ''}. Билеты на данный момент распроданы.`
     : `${escText(show.name)} состоится${leadDate ? ` ${leadDate}` : ''}${leadTime ? ` в ${leadTime}` : ''}${leadVenue ? ` в ${leadVenue}` : ''}${leadCity ? `, ${leadCity}` : ''}. Билеты можно заказать на сайте${leadPrice ? ` по цене от ${leadPrice} шекелей` : ''}.`;
+  const metaDesc = showMetaDesc(show, aiLede);
 
 
   // סיכום לוח ההופעות (מחושב מהפיד, תמיד עדכני): מספר הופעות, ערים וטווח תאריכים
@@ -3605,6 +3631,7 @@ function run() {
   assignShowUrls(shows);
   assignHubs(shows);
   loadEnrichments();
+  computeBoilerplate(shows);
 
   if (fs.existsSync(BRAND.outDir)) {
     fs.rmSync(BRAND.outDir, { recursive: true, force: true });
