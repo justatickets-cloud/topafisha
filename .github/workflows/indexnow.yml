@@ -1,0 +1,45 @@
+name: IndexNow
+
+# מודיע ל-Bing ול-Yandex על עמודים חדשים (indexnow.js).
+# רץ חצי שעה ומעלה אחרי סנכרון הפיד (06:00 / 18:00 UTC), כש-Cloudflare Pages כבר סיים לפרוס.
+# רשימת הכתובות שכבר נשלחו נשמרת ב-cache ולא ב-commit, כדי לא להפעיל בנייה נוספת.
+on:
+  schedule:
+    - cron: '40 6,18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: indexnow
+  cancel-in-progress: false
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    steps:
+      - name: 📥 Checkout Repository
+        uses: actions/checkout@v4
+
+      - name: ⚙️ Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: ♻️ Restore sent list
+        uses: actions/cache/restore@v4
+        with:
+          path: .indexnow-state.json
+          key: indexnow-state-${{ github.run_id }}
+          restore-keys: indexnow-state-
+
+      - name: 🔔 Ping IndexNow
+        run: node indexnow.js https://topafisha.co.il .indexnow-state.json
+
+      - name: 💾 Save sent list
+        if: success()
+        uses: actions/cache/save@v4
+        with:
+          path: .indexnow-state.json
+          key: indexnow-state-${{ github.run_id }}

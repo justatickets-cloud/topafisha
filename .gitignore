@@ -16,3 +16,4 @@ Thumbs.db
 
 # local dev / editor config (machine specific paths)
 .claude/
+.indexnow-state.json
