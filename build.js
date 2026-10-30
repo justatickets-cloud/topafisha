@@ -77,6 +77,8 @@ function computeBoilerplate(shows) {
   for (const s of shows) for (const x of new Set(descSentences(s.description))) cnt[x] = (cnt[x] || 0) + 1;
   BOILER = new Set(Object.keys(cnt).filter(x => cnt[x] >= 3));
 }
+// בלי מקפים בכותרות (חוק ברזל 2): מקף בין מילים הופך לפסיק. ה-slug לא משתנה
+const dashToComma = t => String(t || '').replace(/\s+[—–-]+\s+/g, ', ').replace(/[—–]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 function clipDesc(t, n = 155) {
   t = String(t || '').replace(/\s+[—–-]+\s+/g, ', ').replace(/[—–]/g, ' ').trim(); // בלי מקפים (חוק ברזל 2)
   if (t.length <= n) return t;
@@ -287,7 +289,7 @@ function writeIdsMap(shows) {
   fs.writeFileSync(path.join(BRAND.outDir, 'ids.json'), JSON.stringify(m), 'utf8');
 }
 // Страницы без списка мероприятий с постоянной парой на другом сайте
-const STATIC_ALT = { '/privacy': '/privacy', '/terms': '/terms', '/contact': '/contact', '/magazine/': '/magazine/', '/magazine/news/': '/magazine/news/' };
+const STATIC_ALT = { '/about': '/about', '/privacy': '/privacy', '/terms': '/terms', '/contact': '/contact', '/magazine/': '/magazine/', '/magazine/news/': '/magazine/news/' };
 let ID_BY_PATH = null;
 function pageShowIds(body) {
   if (!ID_BY_PATH) { ID_BY_PATH = new Map(); for (const s of ALL_LIVE_SHOWS) if (s._url) ID_BY_PATH.set(s._url, String(s.id)); }
@@ -330,6 +332,8 @@ function hreflangLinks(canonical, alt) {
 }
 
 function page({ title, description, canonical, head = '', body, alt = '', match = true }) {
+  title = dashToComma(title);
+  body = body.replace(/(<h1[^>]*>)([^<]*)(<\/h1>)/g, (m, a, b, c) => a + dashToComma(b) + c);
   const own = canonical.slice(BRAND.domain.length);
   if (!alt && match && own !== '/' && own !== '/ok') {
     if (STATIC_ALT[own]) alt = BRAND.altSite + STATIC_ALT[own];
@@ -472,11 +476,13 @@ function siteFooter() {
     <a href="/афиша-2026">Афиша 2026</a>
     <a href="/афиша-2027">Афиша 2027</a>
     ${hanukkahSeason() ? `<a href="${HANUKKAH_HUB}">Ханука 2026</a>` : ''}
+    ${ymdStr(israelToday()) <= '2027-01-02' ? `<a href="${NEW_YEAR_HUB}">Новый год 2027</a>` : ''}
   </div>
 
   <div class="footer-bottom wrap">
     <div class="foot-copy">© ${year} ${escText(BRAND.nameHe)} (topafisha.co.il). Все права защищены.</div>
     <div class="footer-legal-links">
+      <a href="/about">О нас</a> ·
       <a href="/privacy">Политика конфиденциальности</a> ·
       <a href="/terms">Условия использования</a> ·
       <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Вопросы и помощь</a> ·
@@ -554,7 +560,7 @@ function showCard(show) {
 }
 
 /* --------------------- Страницы (правовые / о нас) --------------------- */
-const STATIC_SLUGS = ['privacy', 'terms', 'contact'];
+const STATIC_SLUGS = ['about', 'privacy', 'terms', 'contact'];
 
 function staticPage(slug, title, metaDesc, h1, contentHtml) {
   const canonical = `${BRAND.domain}/${slug}`;
@@ -571,6 +577,37 @@ function staticPage(slug, title, metaDesc, h1, contentHtml) {
 }
 
 function buildStaticPages() {
+  // ----- О нас (תרגום של עמוד האודות של idir; עובדות רק משם, בלי מקפים) -----
+  staticPage('about',
+    'О нас | ТОП Афиша',
+    'ТОП Афиша, русскоязычный гид по концертам, спектаклям и культурным событиям Израиля: кто мы, что есть на сайте и как проходит покупка билетов через кассу Bravo.',
+    'О ТОП Афише',
+    `<p class="static-lead">Добро пожаловать в <strong>ТОП Афишу</strong>, русскоязычный гид по концертам, спектаклям и культурным событиям Израиля.</p>
+<p>Наша команда работает в сфере культурных мероприятий и билетов больше десяти лет (с 2012 года) и внимательно следит за сценой в Израиле и за рубежом. Этот опыт мы собрали в одной простой и понятной платформе, чтобы навести порядок в афише и помочь вам выбрать, куда пойти.</p>
+
+<h2>Что мы делаем и зачем создан сайт</h2>
+<p>Тот, кто ищет билет на концерт или спектакль, часто сталкивается с неполной информацией, разрозненными расписаниями и описаниями только на иврите. ТОП Афиша создана, чтобы это исправить:</p>
+<ul>
+<li><strong>Афиша всей страны на русском языке:</strong> сотни концертов, спектаклей, стендапа, балета и детских мероприятий в залах по всему Израилю.</li>
+<li><strong>Удобный поиск:</strong> по городу, залу, дате и жанру.</li>
+<li><strong>Подробные описания и путеводители:</strong> фактические материалы о мероприятиях, ответы на частые вопросы и <a href="/magazine/">статьи журнала</a> о том, куда пойти.</li>
+<li><strong>Точные данные:</strong> даты, время и цены обновляются напрямую из официальной системы продажи билетов.</li>
+</ul>
+
+<h2>Как проходит покупка</h2>
+<p>ТОП Афиша работает как независимый информационный портал. Чтобы покупка была безопасной, а билеты действительными, заказ оформляется напрямую в официальной кассе:</p>
+<ul>
+<li>По кнопке покупки на сайте вы переходите на защищённую страницу заказа <strong>Bravo</strong>, израильской билетной системы, с которой мы работаем с 2013 года.</li>
+<li>Выбор мест в зале, оплата и выпуск билетов происходят прямо в защищённой системе кассы.</li>
+<li><strong>Прозрачность:</strong> мы получаем партнёрское вознаграждение за заказы, сделанные через сайт. Никакой дополнительной наценки к цене билета с нашей стороны нет.</li>
+</ul>
+
+<h2>Поддержка и обращения</h2>
+<ul>
+<li><strong>Вопросы по уже сделанному заказу</strong> (смена даты, отмена, билет не пришёл на почту, вопросы о местах): обращайтесь напрямую в <a href="https://top.kassa.co.il/help" target="_blank" rel="noopener">службу поддержки кассы</a>, которая ведёт продажу билетов.</li>
+<li><strong>Предложения, исправления, общие вопросы и сотрудничество:</strong> пишите нам на <a href="mailto:${BRAND.email}"><strong>${BRAND.email}</strong></a>.</li>
+</ul>`);
+
   // ----- Политика конфиденциальности -----
   staticPage('privacy',
     'Политика конфиденциальности | ТОП Афиша',
@@ -2319,6 +2356,10 @@ function enrichmentSection(show) {
   </section>`;
 }
 
+// נובי גוד: קישור בפוטר עד 2.1, באנר בדף הבית בין 1.12 ל-1.1 (האתר נבנה כל לילה, אז זה נדלק ונכבה לבד)
+const NEW_YEAR_HUB = `/magazine/${encodeURI('Новый-год-2027-в-Израиле-куда-пойти')}/`;
+function newYearBannerOn() { const d = ymdStr(israelToday()); return d >= '2026-12-01' && d <= '2027-01-01'; }
+
 function buildIndex(shows) {
   const sections = [...new Set(shows.map(s => s.section).filter(Boolean))];
   const cities = [...new Set(shows.flatMap(s => (s.Seances || []).map(z => z.city)).filter(Boolean))];
@@ -2355,6 +2396,7 @@ function buildIndex(shows) {
     <p class="hero-eyebrow">${esc(BRAND.tagline)}</p>
     <h1 class="hero-title">Билеты на концерты и спектакли: сегодня, на неделе и по датам 2026</h1>
     <p class="hero-sub">Мы собираем для вас все ведущие концерты, спектакли и мероприятия Израиля. Выбирайте по дате, городу или категории и покупайте билеты быстро и безопасно.</p>
+    ${newYearBannerOn() ? `<p class="hero-sub"><a href="${NEW_YEAR_HUB}"><strong>Новый год 2027 в Израиле: куда пойти ›</strong></a></p>` : ''}
     <div class="search-box">
       <input id="q" type="search" placeholder="Поиск мероприятия, артиста или категории…" autocomplete="off" aria-label="Поиск мероприятия">
     </div>
@@ -2754,7 +2796,7 @@ function buildShow(show) {
       </div>
       <div class="show-head">
         <span class="pill">${escText(show.section)}</span>
-        <h1 class="show-title">${escText(show.name)}</h1>
+        <h1 class="show-title">${escText(dashToComma(show.name))}</h1>
         <p class="show-announce">${escText(show.announce || '')}</p>
         ${artistUrlByName[show.name] ? `<p class="show-artist-link"><a href="${esc(artistUrlByName[show.name])}">Все концерты ${escText(show.name)} ›</a></p>` : ''}
         <div class="show-facts">
