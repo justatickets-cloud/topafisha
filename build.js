@@ -2460,6 +2460,7 @@ function buildIndex(shows) {
   <div id="load-more-wrap" class="load-more-wrap">
     <button id="load-more" class="btn btn-primary load-more-btn" type="button">Показать ещё</button>
   </div>
+  ${telegramCta()}
 </main>
 
 <script src="${assetUrl('app.js')}" defer></script>`;
@@ -2677,6 +2678,15 @@ ${others.map(showCard).join('\n')}
 
 // Внутренние ссылки: похожие мероприятия на каждой странице (категория, зал, город, дата)
 let ALL_LIVE_SHOWS = [];
+// Приглашение в Telegram-канал (под таблицей дат и внизу главной)
+function telegramCta() {
+  return `<a class="tg-cta" href="https://t.me/topafisha_israel" target="_blank" rel="noopener">
+      <span class="tg-cta-icon" aria-hidden="true">✈</span>
+      <span class="tg-cta-text"><b>Наш канал в Telegram</b>Новые концерты и спектакли в Израиле каждый день</span>
+      <span class="tg-cta-go">Подписаться ›</span>
+    </a>`;
+}
+
 function relatedShowsSection(show) {
   const set = k => new Set((show.Seances || []).map(x => x[k]).filter(Boolean));
   const cities = set('city'), halls = set('hall');
@@ -2841,6 +2851,7 @@ ${enrichmentSection(show)}
       </table>
     </div>
     <p class="faq-hint faq-hint-center">Вопросы об отмене или получении билетов? <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Читайте гид по частым вопросам ›</a></p>
+    ${telegramCta()}
   </section>
 ${hanukkahLinksSection(show) || relatedShowsSection(show)}
 ${cityMoreSection(show)}
@@ -3331,6 +3342,13 @@ span.btn-soldout{cursor:default}
 .faq-hint a{color:var(--muted);text-decoration:underline;font-weight:600}
 .faq-hint a:hover{color:var(--plum);opacity:1}
 .faq-hint-center{text-align:center;margin-top:18px}
+.tg-cta{display:flex;align-items:center;gap:12px;max-width:640px;margin:22px auto 0;padding:12px 16px;border-radius:14px;background:#eaf5fc;border:1px solid #c6e3f5;color:#1d3b4f;text-decoration:none}
+.tg-cta:hover{background:#dff0fa}
+.tg-cta-icon{flex:none;width:38px;height:38px;border-radius:50%;background:#2aabee;color:#fff;display:flex;align-items:center;justify-content:center;font-size:18px}
+.tg-cta-text{flex:1;font-size:14px;line-height:1.35}
+.tg-cta-text b{display:block;font-size:15px}
+.tg-cta-go{flex:none;font-weight:700;color:#1b8ad3;font-size:14px}
+@media (max-width:520px){.tg-cta-go{display:none}}
 .mag-sect{color:var(--gold-d);font-weight:700;font-size:13px}
 .mag-note{display:block;margin-top:10px;padding:10px 14px;background:var(--bg);border-left:3px solid var(--gold);border-radius:6px;color:var(--muted);font-style:italic;font-size:14px}
 .mag-picks li{line-height:1.7;margin-bottom:4px}
