@@ -487,7 +487,8 @@ function siteFooter() {
       <a href="/terms">Условия использования</a> ·
       <a href="/magazine/${encodeURI('частые-вопросы-о-покупке-билетов')}/">Вопросы и помощь</a> ·
       <a href="/contact">Контакты</a> ·
-      <a href="https://t.me/topafisha_israel" target="_blank" rel="noopener">Наш канал в Telegram</a>
+      <a href="https://t.me/topafisha_israel" target="_blank" rel="noopener">Telegram</a> ·
+      <a href="https://www.youtube.com/@TopAfisha.israel" target="_blank" rel="noopener">YouTube</a>
     </div>
     <div class="foot-disclaimer">Покупка билетов | Информация, расписание и билеты регулярно обновляются.</div>
   </div>
@@ -2490,6 +2491,7 @@ function buildIndex(shows) {
         name: BRAND.nameHe,
         url: BRAND.domain + '/',
         logo: BRAND.domain + '/assets/logo.svg',
+        sameAs: ['https://www.youtube.com/@TopAfisha.israel', 'https://t.me/topafisha_israel'],
       },
     ],
   };
