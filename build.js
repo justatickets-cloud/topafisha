@@ -1594,7 +1594,7 @@ function weekendArticle(shows) {
   const items = picks.map(s => {
     const se = (s.Seances || []).find(z => wkSet.has(z.date)) || {};
     const buy = seanceSoldOut(se) ? ' <span class="soldout">Билеты распроданы</span>'
-      : ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>`;
+      : ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>`;
     return `<li><a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a> — ${formatDate(se.date)}${se.city ? ', ' + escText(se.city) : ''}${se.hall ? ' · ' + escText(se.hall) : ''}.${buy}</li>`;
   }).join('\n');
   return {
@@ -1632,7 +1632,7 @@ function familyWeekendArticle(shows) {
   const sections = Object.keys(byCity).sort((a, b) => a.localeCompare(b, 'ru')).map(city => {
     const items = byCity[city].map(({ s, se }) => {
       const buy = seanceSoldOut(se) ? ' <span class="soldout">Билеты распроданы</span>'
-        : ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>`;
+        : ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>`;
       const when = `${formatDate(se.date)}${se.time ? ` в ${formatTime(se.time)}` : ''}`;
       return `<li><a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a> — <span class="mag-sect">${escText(s.section)}</span> · ${when}${se.hall ? ' · ' + escText(se.hall) : ''}.${buy}</li>`;
     }).join('\n');
@@ -1772,16 +1772,16 @@ function festivals2027Article(shows) {
     const cities = [...new Set(ses.map(s => s.city).filter(Boolean))];
     const cityText = cities.slice(0, 2).join(' · ') + (cities.length > 2 ? ' и др.' : '');
     return `<article class="card">
-    <a class="card-media" href="${esc(buyUrl)}" target="_blank" rel="noopener sponsored" aria-label="${esc(show.name)}">
+    <a class="card-media" href="${esc(buyUrl)}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored" aria-label="${esc(show.name)}">
       <img loading="lazy" src="${esc(show.image)}" alt="${esc(show.name)}">
       <span class="card-badge">${escText(show.section)}</span>
     </a>
     <div class="card-body">
-      <h3 class="card-title"><a href="${esc(buyUrl)}" target="_blank" rel="noopener sponsored">${escText(show.name)}</a></h3>
+      <h3 class="card-title"><a href="${esc(buyUrl)}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored">${escText(show.name)}</a></h3>
       <p class="card-meta"><span class="ico-cal">${formatDate(se.date)}</span>${cityText ? `<span class="ico-pin">${escText(cityText)}</span>` : ''}</p>
       <div class="card-foot">
         <span class="card-price">${priceLabel(show.priceMin, show.priceMax)}</span>
-        <a class="btn btn-primary" href="${esc(buyUrl)}" target="_blank" rel="noopener sponsored">Заказать сейчас</a>
+        <a class="btn btn-primary" href="${esc(buyUrl)}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored">Заказать сейчас</a>
       </div>
     </div>
   </article>`;
@@ -1836,7 +1836,7 @@ function mustSee2027Article(shows) {
   const itemLi = (s) => {
     const se = [...(s.Seances || [])].sort((a, b) => String(a.date).localeCompare(String(b.date)))[0] || {};
     const buy = seanceSoldOut(se) ? ' <span class="soldout">Билеты распроданы</span>'
-      : (se.link ? ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>` : '');
+      : (se.link ? ` <a class="mag-buy" href="${esc(affiliateUrl(se.link))}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>` : '');
     const when = se.date ? ` · ${formatDate(se.date)}` : '';
     return `<li><a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a>${se.hall ? ' · ' + escText(se.hall) : ''}${when}.${buy}</li>`;
   };
@@ -2085,7 +2085,7 @@ function newsItems(shows) {
     const v = VENUE_REGISTRY.find(x => se.hall && x.hall === se.hall && x.shows.length > 0);
     const venueHtml = v ? `<a href="${esc(v.url)}">${venue}</a>` : venue;
     const buy = seanceSoldOut(se) ? '<span class="soldout">Билеты распроданы</span>'
-      : (se.link ? `<a class="news-cta" href="${esc(affiliateUrl(se.link))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>` : '');
+      : (se.link ? `<a class="news-cta" href="${esc(affiliateUrl(se.link))}" data-start="${esc(seanceStart(se))}" target="_blank" rel="noopener sponsored">Заказать билеты ›</a>` : '');
     const bodyHtml = `<p class="news-lede">${escText(lede)}</p>
 <p>${venueHtml ? `Мероприятие пройдёт в ${venueHtml}` : 'Мероприятие'}${when ? ` — ${escText(when)}` : ''}, и билеты уже открыты для бронирования. Все даты, цены и выбор мест — на полной странице мероприятия: <a href="${esc(s._url)}"><strong>${escText(s.name)}</strong></a>.</p>
 <p>${buy}</p>
@@ -3519,6 +3519,16 @@ const LIVE_JS = `(function(){
         var td=tr.querySelector('td[data-th="Заказ"]');
         if(td) td.innerHTML=SOLD;
       }
+    });
+    // קישור ישיר לקופה (מגזין, חדשות, כרטיסי 2027): כפתור הופך ל"Билеты распроданы", קישור בתמונה או בכותרת מפסיק להוביל לקופה
+    [].forEach.call(document.querySelectorAll('a[data-start]'),function(a){
+      var st=a.getAttribute('data-start');
+      if(!st || st>=nowIL) return;
+      if(a.className.indexOf('card-media')>-1 || (a.parentNode && a.parentNode.className==='card-title')){ a.removeAttribute('href'); a.removeAttribute('target'); return; }
+      var s=document.createElement('span');
+      s.className=a.className.indexOf('btn')>-1 ? 'btn btn-soldout' : 'soldout';
+      s.textContent='Билеты распроданы';
+      a.parentNode.replaceChild(s,a);
     });
     // כרטיס מופע: בעמודי "היום" נבדקים רק המועדים של היום, ובשאר העמודים כל המועדים
     var pth=''; try{pth=decodeURIComponent(location.pathname);}catch(e){}
