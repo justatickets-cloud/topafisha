@@ -248,7 +248,7 @@ function loadShows() {
 const ASSET_VERSIONS = {};
 function assetUrl(name) {
   if (!ASSET_VERSIONS[name]) {
-    const src = { 'styles.css': STYLES, 'app.js': APP_JS, 'accessibility.js': A11Y_JS }[name];
+    const src = { 'styles.css': STYLES, 'app.js': APP_JS, 'accessibility.js': A11Y_JS, 'live.js': LIVE_JS }[name];
     ASSET_VERSIONS[name] = require('crypto').createHash('md5').update(src).digest('hex').slice(0, 8);
   }
   return `/assets/${name}?v=${ASSET_VERSIONS[name]}`;
@@ -393,6 +393,7 @@ height="0" width="0" style="display:none;visibility:hidden"></iframe></noscript>
 ${siteHeader(alt)}
 <div id="content" tabindex="-1"></div>
 ${body}
+<script src="${assetUrl('live.js')}"></script>
 ${siteFooter()}
 ${a11yWidget()}
 <script src="${assetUrl('accessibility.js')}" defer></script>
@@ -526,6 +527,11 @@ function a11yWidget() {
 }
 
 /* --------------------------- Карточка мероприятия -------------------------- */
+// время начала сеанса, "YYYY-MM-DDTHH:MM" по израильскому времени. Без времени: конец дня.
+function seanceStart(s) {
+  const m = /^(\d{2}):(\d{2})/.exec(String(s.time || ''));
+  return s.date ? `${s.date}T${m ? m[1] + ':' + m[2] : '23:59'}` : '';
+}
 function showCard(show) {
   const cities = [...new Set((show.Seances || []).map(s => s.city).filter(Boolean))];
   const cityText = cities.slice(0, 2).join(' · ') + (cities.length > 2 ? ' и др.' : '');
@@ -539,7 +545,8 @@ function showCard(show) {
     data-city="${esc(cities.join('|'))}"
     data-venue="${esc(halls.join('|'))}"
     data-date-from="${esc(show.dateFrom || dates[0] || '')}"
-    data-dates="${esc(dates.join(','))}">
+    data-dates="${esc(dates.join(','))}"
+    data-starts="${esc((show.Seances || []).map(seanceStart).filter(Boolean).join(','))}">
     <a class="card-media" href="${esc(show._url)}" aria-label="${esc(show.name)}">
       <img loading="lazy" src="${esc(show.image)}" alt="${esc(show.name)}">
       <span class="card-badge">${escText(show.section)}</span>
@@ -2566,7 +2573,7 @@ function build404(indexBody) {
 
 /* ----------------------------- Страница мероприятия ---------------------------- */
 function seanceRow(show, s) {
-  return `<tr>
+  return `<tr data-start="${esc(seanceStart(s))}">
     <td data-th="Дата">${formatDate(s.date)}</td>
     <td data-th="Время">${formatTime(s.time)}</td>
     <td data-th="Город">${escText(s.city)}</td>
@@ -3051,6 +3058,7 @@ function buildAssets() {
   fs.writeFileSync(path.join(outAssets, 'styles.css'), STYLES, 'utf8');
   fs.writeFileSync(path.join(outAssets, 'app.js'), APP_JS, 'utf8');
   fs.writeFileSync(path.join(outAssets, 'accessibility.js'), A11Y_JS, 'utf8');
+  fs.writeFileSync(path.join(outAssets, 'live.js'), LIVE_JS, 'utf8');
   const srcAssets = path.join(__dirname, 'assets');
   if (fs.existsSync(srcAssets)) {
     for (const f of fs.readdirSync(srcAssets)) {
@@ -3497,6 +3505,37 @@ html.a11y-contrast-high .card-badge,html.a11y-contrast-high .pill{background:#ff
 @media(prefers-reduced-motion:reduce){
   *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;scroll-behavior:auto !important}
 }`;
+
+// עמודים סטטיים נבנים פעם ביום: מועד שכבר התחיל מסומן "אזלו הכרטיסים" בלי כפתור הזמנה פעיל (נטען בכל עמוד, לפני app.js)
+const LIVE_JS = `(function(){
+  try{
+    // ההזמנה נסגרת שעה לפני תחילת ההופעה (שעון ישראל)
+    var nowIL=new Date(Date.now()+3600000).toLocaleString('sv-SE',{timeZone:'Asia/Jerusalem'}).replace(' ','T').slice(0,16);
+    var SOLD='<span class="soldout">Билеты распроданы</span>';
+    // שורת מועד בעמוד מופע
+    [].forEach.call(document.querySelectorAll('tr[data-start]'),function(tr){
+      var st=tr.getAttribute('data-start');
+      if(st && st<nowIL){
+        var td=tr.querySelector('td[data-th="Заказ"]');
+        if(td) td.innerHTML=SOLD;
+      }
+    });
+    // כרטיס מופע: בעמודי "היום" נבדקים רק המועדים של היום, ובשאר העמודים כל המועדים
+    var pth=''; try{pth=decodeURIComponent(location.pathname);}catch(e){}
+    var todayOnly=pth.toLowerCase().indexOf('сегодня')>-1 && pth.toLowerCase().indexOf('недел')<0, todayIL=new Date().toLocaleString('sv-SE',{timeZone:'Asia/Jerusalem'}).slice(0,10);
+    [].forEach.call(document.querySelectorAll('.card[data-starts]'),function(c){
+      var st=(c.getAttribute('data-starts')||'').split(',').filter(Boolean);
+      if(todayOnly) st=st.filter(function(x){return x.slice(0,10)===todayIL;});
+      if(st.length && st.every(function(x){return x<nowIL;})){
+        c.className+=' is-soldout';
+        var pr=c.querySelector('.card-price'); if(pr) pr.innerHTML=SOLD;
+        var b=c.querySelector('.card-foot .btn');
+        if(b){ var s=document.createElement('span'); s.className='btn btn-soldout'; s.setAttribute('aria-disabled','true'); s.textContent='Билеты распроданы'; b.parentNode.replaceChild(s,b); }
+      }
+    });
+  }catch(e){}
+})();
+`;
 
 const APP_JS = `(function(){
   var grid=document.getElementById('grid');
